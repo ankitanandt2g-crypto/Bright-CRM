@@ -37,3 +37,9 @@ app.set('port', process.env.PORT || 8888);
 const server = app.listen(app.get('port'), () => {
   console.log(`Express running → On PORT : ${server.address().port}`);
 });
+const authController = require("./controllers/authController");
+
+mongoose.connection.once("open", async () => {
+  await authController.ensureDefaultAdmin();
+  await authController.ensureDefaultWorker();
+});

@@ -1,0 +1,38 @@
+// frontend/src/pages/Planning/planningApi.js
+import axios from "axios";
+
+const API = "http://localhost:8888/api/planning";
+
+const authHeaders = () => {
+  const token = window.localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+export const getPlanningTasks = async (jobId) => {
+  const res = await axios.get(`${API}/list`, {
+    headers: { ...authHeaders() },
+    params: { jobId }, // ✅ filter by job
+  });
+  return res.data?.result || [];
+};
+
+export const createPlanningTask = async (payload) => {
+  const res = await axios.post(`${API}/create`, payload, {
+    headers: { ...authHeaders() },
+  });
+  return res.data?.result || res.data;
+};
+
+export const updatePlanningTask = async (id, payload) => {
+  const res = await axios.patch(`${API}/update/${id}`, payload, {
+    headers: { ...authHeaders() },
+  });
+  return res.data?.result || res.data;
+};
+
+export const deletePlanningTask = async (id) => {
+  const res = await axios.delete(`${API}/delete/${id}`, {
+    headers: { ...authHeaders() },
+  });
+  return res.data;
+};

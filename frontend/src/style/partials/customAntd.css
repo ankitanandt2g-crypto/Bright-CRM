@@ -41,6 +41,7 @@
 
 .ant-table-thead > tr > th {
   font-weight: 700;
+  text-align: center !important;
 }
 .ant-typography strong {
   font-weight: 700;

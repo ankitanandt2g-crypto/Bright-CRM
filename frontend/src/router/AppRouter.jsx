@@ -1,44 +1,85 @@
-import { lazy, useEffect } from 'react';
+import { Routes, Route, Navigate } from "react-router-dom";
+import ProtectedRoute from "./ProtectedRoute";
 
-import {} from 'react-router-dom';
-import {} from 'react-router-dom';
-import { Navigate, useLocation, useRoutes } from 'react-router-dom';
-import { useAppContext } from '@/context/appContext';
+import Login from "../pages/Auth/Login";
+import Register from "../pages/Auth/Register";
+import ForgotPassword from "../pages/Auth/ForgotPassword";
+import ResetPassword from "../pages/Auth/ResetPassword";
 
-import routes from './routes';
+import AdminLayout from "../pages/Admin/Dashboard/AdminLayout";
+
+// ✅ Existing/Completed modules
+import Lead from "../pages/Lead";
+import Jobs from "../pages/Jobs";
+import Kanban from "../pages/Kanban";
+import Planning from "../pages/Planning";
+
+// ✅ Other sidebar modules
+import Fabrication from "../pages/Fabrication";
+import QC from "../pages/Quality";
+import Installation from "../pages/Installation";
+import Attendance from "../pages/Attendance";
+import Customer from "../pages/Customer";
+import Invoice from "../pages/Invoice";
+import Payment from "../pages/Payment";
+//import Settings from "../pages/Settings";
+// import About from "../pages/About";
+
+import WorkerDashboard from "../pages/Worker/WorkerDashboard";
+import CustomerDashboard from "../pages/CustomerPortal/Dashboard";
 
 export default function AppRouter() {
-  let location = useLocation();
-  const { state: stateApp, appContextAction } = useAppContext();
-  const { app } = appContextAction;
+  return (
+    <Routes>
+      {/* App open -> Login */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
 
-  const routesList = [];
+      {/* ✅ Public */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-  Object.entries(routes).forEach(([key, value]) => {
-    routesList.push(...value);
-  });
+      {/* ✅ Admin (nested) */}
+      <Route element={<ProtectedRoute allowRoles={["admin"]} />}>
+        <Route path="/admin" element={<AdminLayout />}>
+          {/* ✅ default admin landing */}
+          <Route index element={<Lead />} />
 
-  function getAppNameByPath(path) {
-    for (let key in routes) {
-      for (let i = 0; i < routes[key].length; i++) {
-        if (routes[key][i].path === path) {
-          return key;
-        }
-      }
-    }
-    // Return 'default' app  if the path is not found
-    return 'default';
-  }
-  useEffect(() => {
-    if (location.pathname === '/') {
-      app.default();
-    } else {
-      const path = getAppNameByPath(location.pathname);
-      app.open(path);
-    }
-  }, [location]);
+          {/* Completed */}
+          <Route path="lead" element={<Lead />} />
+          <Route path="jobs" element={<Jobs />} />
+          <Route path="kanban" element={<Kanban />} />
+          <Route path="planning" element={<Planning />} />
 
-  let element = useRoutes(routesList);
+          {/* Other modules */}
+          <Route path="fabrication" element={<Fabrication />} />
+          <Route path="qc" element={<QC />} />
+          <Route path="installation" element={<Installation />} />
+          <Route path="attendance" element={<Attendance />} />
+          <Route path="customer" element={<Customer />} />
+          <Route path="invoice" element={<Invoice />} />
+          <Route path="payment" element={<Payment />} />
+          
 
-  return element;
+          {/* If you keep About in sidebar, create About page and enable this:
+          <Route path="about" element={<About />} />
+          */}
+        </Route>
+      </Route>
+
+      {/* ✅ Worker */}
+      <Route element={<ProtectedRoute allowRoles={["worker"]} />}>
+        <Route path="/worker" element={<WorkerDashboard />} />
+      </Route>
+
+      {/* ✅ Customer */}
+      <Route element={<ProtectedRoute allowRoles={["customer"]} />}>
+        <Route path="/portal" element={<CustomerDashboard />} />
+      </Route>
+
+      {/* fallback */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
 }

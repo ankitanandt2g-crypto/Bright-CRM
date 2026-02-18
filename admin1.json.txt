@@ -1,0 +1,10 @@
+{
+  "_id": { "$oid": "698b1a7c345b09e0c31ca530" },
+  "removed": false,
+  "user": { "$oid": "698b1a7c345b09e0c31ca52c" },
+  "password": "$2a$10$gSluOXzwtqx5BYDjebYGAeKC5VvNny6CtBnyWOYqmWJCuQE.qk1mW",
+  "salt": "3A1AoWmr2",
+  "emailVerified": true,
+  "authType": "email",
+  "loggedSessions": []
+}

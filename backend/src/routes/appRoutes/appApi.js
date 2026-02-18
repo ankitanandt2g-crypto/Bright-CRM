@@ -2,6 +2,30 @@ const express = require('express');
 const { catchErrors } = require('@/handlers/errorHandlers');
 const router = express.Router();
 
+const authRoutes = require("./auth.routes");
+router.use("/auth", authRoutes);
+
+const leadRoutes = require("./lead.routes");
+router.use("/lead", leadRoutes);
+
+const kanbanRoutes = require("./kanban.routes");
+router.use("/kanban", kanbanRoutes);
+
+const jobRoutes = require("./job.routes");
+router.use("/job", jobRoutes);
+
+const planningRoutes = require("./planning.routes");
+router.use("/planning", planningRoutes);
+
+const fabricationRoutes = require("./fabrication.routes");
+router.use("/fabrication", fabricationRoutes);
+
+const qcRoutes = require("./qc.routes");
+router.use("/qc", qcRoutes);
+
+const customerRouter = require("./customer.routes");
+router.use("/customer", customerRouter);
+
 const appControllers = require('@/controllers/appControllers');
 const { routesList } = require('@/models/utils');
 
