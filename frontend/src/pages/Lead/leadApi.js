@@ -1,4 +1,3 @@
-// leadApi.js
 import axios from "axios";
 
 const API = "http://localhost:8888/api/lead";
@@ -11,21 +10,14 @@ const authHeaders = () => {
 
 export const getLeads = async () => {
   const res = await axios.get(`${API}/list`, {
-    headers: {
-      ...authHeaders(),
-    },
+    headers: { ...authHeaders() },
   });
-
-  // ✅ Your backend response looks like: { success, result, message }
-  // so return result safelyfrontend/src/
   return res.data?.result || [];
 };
 
 export const createLead = async (payload) => {
   const res = await axios.post(`${API}/create`, payload, {
-    headers: {
-      ...authHeaders(),
-    },
+    headers: { ...authHeaders() },
   });
   return res.data;
 };
@@ -39,24 +31,9 @@ export const updateLead = async (id, payload) => {
 
 export const deleteLead = async (id) => {
   const res = await axios.delete(`${API}/delete/${id}`, {
-    headers: {
-      ...authHeaders(),
-    },
+    headers: { ...authHeaders() },
   });
   return res.data;
 };
 
-{/*export const createJobFromLead = async (leadId) => {
-  const res = await axios.post(`${API}/convert-to-job/${leadId}`, {}, {
-    headers: { ...authHeaders() },
-  });
-
-  return res.data?.result; // { job, customer }
-};*/}
-
-export const createJobFromLead = async (leadId) => {
-  const res = await axios.post(`${API}/convert-to-job/${leadId}`, {}, {
-    headers: { ...authHeaders() },
-  });
-  return res.data?.result;
-};
+// ❌ Removed: createJobFromLead (Job will be created ONLY when Quote Approved)

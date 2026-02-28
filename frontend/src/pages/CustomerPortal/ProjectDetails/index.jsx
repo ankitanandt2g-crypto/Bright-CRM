@@ -1,130 +1,149 @@
+// frontend/src/pages/CustomerPortal/ProjectDetails/index.jsx
 import { useEffect, useState } from "react";
-import { Card, Tag, Typography, Button, message, Skeleton, Descriptions, Divider, Empty } from "antd";
+import { Card, Descriptions, Tag, Button, Row, Col, Timeline, message, Spin } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
+import { customerGetProjectById } from "../customerApi";
 
-import CustomerLayout from "../CustomerLayout";
-import { getCustomerProjectById } from "../../../api/customerPortalApi";
-
-const { Title, Text } = Typography;
+const stageColor = (stage) => {
+  const s = String(stage || "").toLowerCase();
+  if (s.includes("planning")) return "blue";
+  if (s.includes("fabrication")) return "purple";
+  if (s.includes("quality")) return "gold";
+  if (s.includes("installation")) return "green";
+  if (s.includes("hold")) return "orange";
+  if (s.includes("closed") || s.includes("completed")) return "success";
+  return "default";
+};
 
 export default function CustomerProjectDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [project, setProject] = useState(null);
 
-  const load = async () => {
+  const fetchDetails = async () => {
     setLoading(true);
     try {
-      const data = await getCustomerProjectById(id);
-      setProject(data?.result || null);
+      const res = await customerGetProjectById(id);
+      setProject(res || null);
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Failed to load project");
+      message.error(err?.response?.data?.message || err?.message || "Failed to load project details");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    fetchDetails();
   }, [id]);
 
-  const milestones = Array.isArray(project?.milestones) ? project.milestones : [];
-  const tasks = Array.isArray(project?.tasks) ? project.tasks : [];
+  if (loading) {
+    return (
+      <div style={{ padding: 16 }}>
+        <Card>
+          <Spin />
+        </Card>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div style={{ padding: 16 }}>
+        <Card
+          title="Project Details"
+          extra={<Button onClick={() => navigate("/portal/projects")}>Back</Button>}
+        >
+          Not found.
+        </Card>
+      </div>
+    );
+  }
+
+  const history = Array.isArray(project?.history) ? project.history : [];
+  // expected format:
+  // history: [{ title:"Planning Started", at:"2026-02-10T...", note:"..." }]
 
   return (
-    <CustomerLayout title="Project Details">
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-        <Button onClick={() => navigate("/portal/projects")}>Back to Projects</Button>
-      </div>
+    <div style={{ padding: 16 }}>
+      <Row gutter={[12, 12]}>
+        <Col span={24}>
+          <Card
+            title={project?.title || "Project"}
+            extra={
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button onClick={() => navigate("/portal/projects")}>Back</Button>
+              </div>
+            }
+          >
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="Stage">
+                <Tag color={stageColor(project?.stage)}>{project?.stage || "—"}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Status">
+                <Tag>{project?.status || "—"}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Start Date">
+                {project?.startDate ? new Date(project.startDate).toLocaleDateString() : "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Expected Completion">
+                {project?.expectedEndDate ? new Date(project.expectedEndDate).toLocaleDateString() : "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Site / Location" span={2}>
+                {project?.siteAddress || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Notes" span={2}>
+                {project?.notes || "—"}
+              </Descriptions.Item>
+            </Descriptions>
+          </Card>
+        </Col>
 
-      <Card style={{ borderRadius: 12 }}>
-        {loading ? (
-          <Skeleton active />
-        ) : !project ? (
-          <Empty description="Project not found" />
-        ) : (
-          <>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <Title level={4} style={{ margin: 0 }}>
-                {project?.name || "-"}
-              </Title>
-              {project?.status ? <Tag>{project.status}</Tag> : null}
-            </div>
+        <Col xs={24} md={12}>
+          <Card title="Progress Timeline">
+            {history.length === 0 ? (
+              <div style={{ opacity: 0.7 }}>No updates yet.</div>
+            ) : (
+              <Timeline
+                items={history
+                  .sort((a, b) => new Date(b?.at || 0) - new Date(a?.at || 0))
+                  .map((h) => ({
+                    children: (
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{h?.title || "Update"}</div>
+                        <div style={{ opacity: 0.7, fontSize: 12 }}>
+                          {h?.at ? new Date(h.at).toLocaleString() : ""}
+                        </div>
+                        {h?.note ? <div style={{ marginTop: 6 }}>{h.note}</div> : null}
+                      </div>
+                    ),
+                  }))}
+              />
+            )}
+          </Card>
+        </Col>
 
-            <Text type="secondary">
-              View project information, dates, milestones and tasks.
-            </Text>
-
-            <Divider style={{ margin: "16px 0" }} />
-
-            <Descriptions bordered size="middle" column={{ xs: 1, sm: 2, md: 2, lg: 2 }}>
-              <Descriptions.Item label="Project Code">{project?.code || "-"}</Descriptions.Item>
-              <Descriptions.Item label="Client / Company">{project?.company || "-"}</Descriptions.Item>
-
-              <Descriptions.Item label="Start Date">{project?.startDate || "-"}</Descriptions.Item>
-              <Descriptions.Item label="End Date">{project?.endDate || "-"}</Descriptions.Item>
-
-              <Descriptions.Item label="Budget">{project?.budget || "-"}</Descriptions.Item>
-              <Descriptions.Item label="Priority">{project?.priority || "-"}</Descriptions.Item>
-
-              <Descriptions.Item label="Description" span={2}>
-                {project?.description || "-"}
+        <Col xs={24} md={12}>
+          <Card title="Payment / Invoice Status">
+            <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label="Total Invoiced">
+                ₹ {Number(project?.payment?.invoiced || 0).toFixed(2)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Paid">
+                ₹ {Number(project?.payment?.paid || 0).toFixed(2)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Due">
+                ₹ {Number(project?.payment?.due || 0).toFixed(2)}
               </Descriptions.Item>
             </Descriptions>
 
-            {/* ✅ Optional sections (only if backend sends milestones/tasks arrays) */}
-            <Divider style={{ margin: "18px 0" }} />
-
-            <Title level={5} style={{ marginBottom: 8 }}>
-              Milestones
-            </Title>
-            {milestones.length === 0 ? (
-              <Empty description="No milestones found" />
-            ) : (
-              <div style={{ display: "grid", gap: 10 }}>
-                {milestones.map((m, idx) => (
-                  <Card key={m?._id || idx} size="small" style={{ borderRadius: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                      <Text strong>{m?.title || `Milestone ${idx + 1}`}</Text>
-                      {m?.status ? <Tag>{m.status}</Tag> : null}
-                    </div>
-                    <Text type="secondary">{m?.dueDate ? `Due: ${m.dueDate}` : ""}</Text>
-                    <div style={{ marginTop: 6 }}>
-                      <Text>{m?.description || ""}</Text>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            <Divider style={{ margin: "18px 0" }} />
-
-            <Title level={5} style={{ marginBottom: 8 }}>
-              Tasks
-            </Title>
-            {tasks.length === 0 ? (
-              <Empty description="No tasks found" />
-            ) : (
-              <div style={{ display: "grid", gap: 10 }}>
-                {tasks.map((t, idx) => (
-                  <Card key={t?._id || idx} size="small" style={{ borderRadius: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                      <Text strong>{t?.title || `Task ${idx + 1}`}</Text>
-                      {t?.status ? <Tag>{t.status}</Tag> : null}
-                    </div>
-                    <Text type="secondary">{t?.dueDate ? `Due: ${t.dueDate}` : ""}</Text>
-                    <div style={{ marginTop: 6 }}>
-                      <Text>{t?.description || ""}</Text>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </Card>
-    </CustomerLayout>
+            <div style={{ marginTop: 12, opacity: 0.7 }}>
+              (Optional next step: show invoice list + PDF download)
+            </div>
+          </Card>
+        </Col>
+      </Row>
+    </div>
   );
 }

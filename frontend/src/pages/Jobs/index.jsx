@@ -8,7 +8,6 @@ import { useJob } from "../../context/JobContext";
 
 const { Option } = Select;
 
-// ✅ PPT-aligned stages
 const STAGES = [
   "Backlog (Contract Stage)",
   "Site Measurement",
@@ -20,10 +19,8 @@ const STAGES = [
   "Closure",
 ];
 
-// ✅ statuses
 const STATUSES = ["Backlog", "Active", "On Hold", "Closed"];
 
-// 🎨 Stage colors
 const STAGE_COLORS = {
   "Backlog (Contract Stage)": "default",
   "Site Measurement": "blue",
@@ -35,12 +32,21 @@ const STAGE_COLORS = {
   "Closure": "volcano",
 };
 
-// 🎨 Status colors
 const STATUS_COLORS = {
   Backlog: "default",
   Active: "green",
   "On Hold": "orange",
   Closed: "red",
+};
+
+// ✅ generate jobId for manual create (Job schema requires it)
+const genJobId = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `J-${y}${m}${day}-${rand}`;
 };
 
 export default function Jobs() {
@@ -61,9 +67,7 @@ export default function Jobs() {
       const data = await getJobs();
       setJobs(Array.isArray(data) ? data : []);
     } catch (err) {
-      message.error(
-        err?.response?.data?.message || err?.message || "Failed to fetch jobs"
-      );
+      message.error(err?.response?.data?.message || err?.message || "Failed to fetch jobs");
     } finally {
       setLoading(false);
     }
@@ -75,9 +79,12 @@ export default function Jobs() {
 
   const handleSubmit = async (values) => {
     try {
-      // ✅ default lifecycle values if not provided
+      // ✅ Job schema requires jobId
       const payload = {
         ...values,
+        jobId: values.jobId || genJobId(),
+        customer: values.customer || "",
+        site: values.site || "",
         stage: values.stage || "Backlog (Contract Stage)",
         status: values.status || "Backlog",
       };
@@ -88,9 +95,7 @@ export default function Jobs() {
       setEditData(null);
       await fetchJobs();
     } catch (err) {
-      message.error(
-        err?.response?.data?.message || err?.message || "Failed to create job"
-      );
+      message.error(err?.response?.data?.message || err?.message || "Failed to create job");
     }
   };
 
@@ -113,26 +118,20 @@ export default function Jobs() {
     }
   };
 
-  // ✅ UPDATED open handler (context + localStorage + jobData + route state)
   const openJob = (job, route = "/kanban-board") => {
-    const jobId = job?._id || job?.id || job?.jobId;
+    const jobId = job?._id;
 
     if (!jobId) {
       message.error("Job id missing");
       return;
     }
 
-    // set active job id
     setActiveJobId(jobId);
     localStorage.setItem("activeJobId", jobId);
 
-    // ✅ store job data job-wise (for dynamic header in Kanban/Planning)
     localStorage.setItem(`activeJobData_${jobId}`, JSON.stringify(job));
-
-    // optional backward compat
     localStorage.setItem("activeJobData", JSON.stringify(job));
 
-    // ✅ pass state so page loads instantly
     navigate(route, { state: { job } });
   };
 
@@ -146,8 +145,8 @@ export default function Jobs() {
 
   const columns = [
     { title: "Job ID", dataIndex: "jobId" },
-    { title: "Customer", dataIndex: "customer" },
-    { title: "Site", dataIndex: "site" },
+    { title: "Customer", dataIndex: "customer", render: (v) => v || "-" },
+    { title: "Site", dataIndex: "site", render: (v) => v || "-" },
 
     {
       title: "Stage",
@@ -188,8 +187,7 @@ export default function Jobs() {
     {
       title: "Linked Lead",
       dataIndex: "leadId",
-      render: (v) =>
-        v ? <Tag color="green">Yes</Tag> : <Tag color="red">No</Tag>,
+      render: (v) => (v ? <Tag color="green">Yes</Tag> : <Tag color="red">No</Tag>),
     },
 
     {
@@ -226,15 +224,7 @@ export default function Jobs() {
     <div style={{ padding: 20 }}>
       <h2>Jobs Management (Admin)</h2>
 
-      {/* Filters */}
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          marginBottom: 15,
-          alignItems: "center",
-        }}
-      >
+      <div style={{ display: "flex", gap: 12, marginBottom: 15, alignItems: "center" }}>
         <Select value={stageFilter} style={{ width: 240 }} onChange={setStageFilter}>
           <Option value="All">All Stages</Option>
           {STAGES.map((s) => (
@@ -282,12 +272,7 @@ export default function Jobs() {
         pagination={{ pageSize: 10 }}
       />
 
-      <JobForm
-        open={open}
-        onCancel={() => setOpen(false)}
-        onSubmit={handleSubmit}
-        initialValues={editData}
-      />
+      <JobForm open={open} onCancel={() => setOpen(false)} onSubmit={handleSubmit} initialValues={editData} />
     </div>
   );
 }

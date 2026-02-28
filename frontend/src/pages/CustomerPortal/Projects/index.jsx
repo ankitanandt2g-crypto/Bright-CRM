@@ -1,133 +1,108 @@
-import { useEffect, useState } from "react";
-import { Table, Tag, Button, message, Space, Typography, Input, Card } from "antd";
+// frontend/src/pages/CustomerPortal/Projects/index.jsx
+import { useEffect, useMemo, useState } from "react";
+import { Card, Table, Tag, Input, Button, message } from "antd";
 import { useNavigate } from "react-router-dom";
+import { customerGetProjects } from "../customerApi";
 
-import CustomerLayout from "../CustomerLayout";
-import { getCustomerProjects } from "../../../api/customerPortalApi";
-
-const { Title, Text } = Typography;
+const stageColor = (stage) => {
+  const s = String(stage || "").toLowerCase();
+  if (s.includes("planning")) return "blue";
+  if (s.includes("fabrication")) return "purple";
+  if (s.includes("quality")) return "gold";
+  if (s.includes("installation")) return "green";
+  if (s.includes("hold")) return "orange";
+  if (s.includes("closed") || s.includes("completed")) return "success";
+  return "default";
+};
 
 export default function CustomerProjects() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [projects, setProjects] = useState([]);
   const [q, setQ] = useState("");
-  const navigate = useNavigate();
 
-  const load = async () => {
+  const fetchProjects = async () => {
     setLoading(true);
     try {
-      const data = await getCustomerProjects();
-      const list = Array.isArray(data?.result) ? data.result : [];
-      setProjects(list);
+      const res = await customerGetProjects();
+      setProjects(Array.isArray(res) ? res : []);
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Failed to load projects");
+      message.error(err?.response?.data?.message || err?.message || "Failed to fetch projects");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    fetchProjects();
   }, []);
 
-  const filtered = projects.filter((p) => {
-    const name = (p?.name || "").toLowerCase();
-    const code = (p?.code || "").toLowerCase();
-    const status = (p?.status || "").toLowerCase();
-    const query = q.toLowerCase();
-    return name.includes(query) || code.includes(query) || status.includes(query);
-  });
+  const filtered = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    if (!query) return projects;
+    return projects.filter((p) => {
+      const title = String(p?.title || "").toLowerCase();
+      const status = String(p?.status || "").toLowerCase();
+      const stage = String(p?.stage || "").toLowerCase();
+      return title.includes(query) || status.includes(query) || stage.includes(query);
+    });
+  }, [projects, q]);
 
   const columns = [
+    { title: "Project", dataIndex: "title", key: "title" },
     {
-      title: "Project",
-      dataIndex: "name",
-      key: "name",
-      render: (v) => <Text strong>{v || "-"}</Text>,
-    },
-    {
-      title: "Code",
-      dataIndex: "code",
-      key: "code",
-      width: 140,
-      render: (v) => <Text>{v || "-"}</Text>,
+      title: "Stage",
+      dataIndex: "stage",
+      key: "stage",
+      render: (v) => <Tag color={stageColor(v)}>{v || "—"}</Tag>,
     },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 160,
-      render: (v) => <Tag>{v || "NA"}</Tag>,
+      render: (v) => <Tag>{v || "—"}</Tag>,
     },
     {
-      title: "Start",
-      dataIndex: "startDate",
-      key: "startDate",
-      width: 140,
-      render: (v) => <Text>{v || "-"}</Text>,
-    },
-    {
-      title: "End",
-      dataIndex: "endDate",
-      key: "endDate",
-      width: 140,
-      render: (v) => <Text>{v || "-"}</Text>,
+      title: "Last Update",
+      key: "updatedAt",
+      render: (_, row) => {
+        const d = row?.updatedAt || row?.createdAt;
+        if (!d) return "—";
+        return new Date(d).toLocaleString();
+      },
     },
     {
       title: "Action",
       key: "action",
-      width: 160,
       render: (_, row) => (
-        <Space>
-          <Button type="link" onClick={() => navigate(`/portal/projects/${row?._id}`)}>
-            View
-          </Button>
-        </Space>
+        <Button type="link" onClick={() => navigate(`/portal/projects/${row?._id}`)}>
+          View Details
+        </Button>
       ),
     },
   ];
 
   return (
-    <CustomerLayout title="My Projects">
-      <Card style={{ borderRadius: 12 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-            marginBottom: 12,
-          }}
-        >
-          <div>
-            <Title level={4} style={{ margin: 0 }}>
-              Projects
-            </Title>
-            <Text type="secondary">Search and view your ongoing/completed projects.</Text>
-          </div>
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Input
-              placeholder="Search by name / code / status"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              style={{ width: 260 }}
-              allowClear
-            />
-            <Button onClick={load} loading={loading}>
-              Refresh
-            </Button>
-          </div>
-        </div>
-
+    <div style={{ padding: 16 }}>
+      <Card
+        title="My Projects"
+        extra={
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by project, stage, status..."
+            style={{ width: 320 }}
+            allowClear
+          />
+        }
+      >
         <Table
           rowKey={(r) => r?._id}
           loading={loading}
-          dataSource={filtered}
           columns={columns}
-          pagination={{ pageSize: 10 }}
+          dataSource={filtered}
         />
       </Card>
-    </CustomerLayout>
+    </div>
   );
 }

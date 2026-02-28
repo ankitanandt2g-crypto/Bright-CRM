@@ -1,7 +1,7 @@
 const Job = require("../models/appModels/Job");
 const Lead = require("../models/appModels/Lead");
 
-// GET /api/job/list
+// ✅ GET /api/job/list
 exports.listJobs = async (req, res) => {
   try {
     const jobs = await Job.find({}).sort({ createdAt: -1 });
@@ -11,7 +11,22 @@ exports.listJobs = async (req, res) => {
   }
 };
 
-// POST /api/job/create
+// ✅ GET /api/job/read/:id  (NEW)
+exports.readJob = async (req, res) => {
+  try {
+    const job = await Job.findById(req.params.id);
+
+    if (!job) {
+      return res.status(404).json({ success: false, result: null, message: "Job not found" });
+    }
+
+    return res.status(200).json({ success: true, result: job, message: "Job fetched" });
+  } catch (e) {
+    return res.status(500).json({ success: false, result: null, message: e.message });
+  }
+};
+
+// ✅ POST /api/job/create
 exports.createJob = async (req, res) => {
   try {
     const created = await Job.create(req.body);
@@ -21,20 +36,22 @@ exports.createJob = async (req, res) => {
   }
 };
 
-// DELETE /api/job/delete/:id
+// ✅ DELETE /api/job/delete/:id
 exports.deleteJob = async (req, res) => {
   try {
     const deleted = await Job.findByIdAndDelete(req.params.id);
+
     if (!deleted) {
       return res.status(404).json({ success: false, result: null, message: "Job not found" });
     }
+
     return res.status(200).json({ success: true, result: deleted, message: "Job deleted" });
   } catch (e) {
     return res.status(500).json({ success: false, result: null, message: e.message });
   }
 };
 
-// POST /api/job/from-lead/:leadId  ✅ Lead -> Job
+// ✅ POST /api/job/from-lead/:leadId  (Lead -> Job)
 exports.createJobFromLead = async (req, res) => {
   try {
     const leadId = req.params.leadId;
@@ -79,7 +96,7 @@ exports.createJobFromLead = async (req, res) => {
   }
 };
 
-// PATCH /api/job/update/:id
+// ✅ PATCH /api/job/update/:id
 exports.updateJob = async (req, res) => {
   try {
     const updated = await Job.findByIdAndUpdate(req.params.id, req.body, {
@@ -96,4 +113,3 @@ exports.updateJob = async (req, res) => {
     return res.status(400).json({ success: false, result: null, message: e.message });
   }
 };
-

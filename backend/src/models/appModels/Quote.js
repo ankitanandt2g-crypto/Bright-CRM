@@ -1,141 +1,66 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const quoteSchema = new mongoose.Schema({
-  removed: {
-    type: Boolean,
-    default: false,
-  },
-  createdBy: { type: mongoose.Schema.ObjectId, ref: 'Admin', required: true },
+const QuoteSchema = new mongoose.Schema(
+  {
+    quoteNumber: { type: String, unique: true, index: true },
 
-  converted: {
-    type: Boolean,
-    default: false,
-  },
-  number: {
-    type: Number,
-    required: true,
-  },
-  year: {
-    type: Number,
-    required: true,
-  },
-  content: String,
-  date: {
-    type: Date,
-    required: true,
-  },
-  expiredDate: {
-    type: Date,
-    required: true,
-  },
+    // linkages
+    leadId: { type: mongoose.Schema.Types.ObjectId, ref: "Lead", required: true },
+    customerId: { type: mongoose.Schema.Types.ObjectId, ref: "Customer", default: null },
+    jobId: { type: mongoose.Schema.Types.ObjectId, ref: "Job", default: null },
 
-  client: {
-    type: mongoose.Schema.ObjectId,
-    ref: 'Client',
-    required: true,
-    autopopulate: true,
-  },
-  items: [
-    {
-      itemName: {
-        type: String,
-        required: true,
-      },
-      description: {
-        type: String,
-      },
-      quantity: {
-        type: Number,
-        required: true,
-      },
-      price: {
-        type: Number,
-        required: true,
-      },
-      // taxRate: {
-      //   type: Number,
-      //   default: 0,
-      // },
-      // subTotal: {
-      //   type: Number,
-      //   default: 0,
-      // },
-      // taxTotal: {
-      //   type: Number,
-      //   default: 0,
-      // },
-      total: {
-        type: Number,
-        required: true,
-      },
+    // customer snapshot (from lead)
+    customerName: { type: String, required: true },
+    contactPerson: { type: String, default: "" },
+    phone: { type: String, required: true },
+    email: { type: String, default: "" },
+
+    // project/site
+    siteAddress: { type: String, required: true },
+    projectType: { type: String, required: true },
+    balustradeType: { type: String, required: true },
+    leadSource: { type: String, default: "" },
+
+    // scope (PPT/SOW mandatory)
+    scope: { type: String, required: true },
+    inclusions: { type: String, required: true },
+    exclusions: { type: String, required: true },
+    assumptions: { type: String, default: "" },
+
+    // estimation
+    materialCost: { type: Number, default: 0 },
+    laborCost: { type: Number, default: 0 },
+    installCost: { type: Number, default: 0 },
+    totalAmount: { type: Number, required: true },
+
+    // planning estimates
+    expectedDraftHours: { type: Number, default: 0 },
+    expectedFabHours: { type: Number, default: 0 },
+    expectedInstallHours: { type: Number, default: 0 },
+    crewSize: { type: Number, default: 1 },
+
+    status: {
+      type: String,
+      enum: ["Draft", "Sent", "Client Viewed", "Approved", "Rejected", "Expired", "Converted to Job"],
+      default: "Draft",
     },
-  ],
-  taxRate: {
-    type: Number,
+
+    approvedAt: { type: Date, default: null },
   },
-  subTotal: {
-    type: Number,
-  },
-  taxTotal: {
-    type: Number,
-  },
-  total: {
-    type: Number,
-  },
-  credit: {
-    type: Number,
-    default: 0,
-  },
-  currency: {
-    type: String,
-    default: 'NA',
-    uppercase: true,
-    required: true,
-  },
-  discount: {
-    type: Number,
-    default: 0,
-  },
-  notes: {
-    type: String,
-  },
-  status: {
-    type: String,
-    enum: ['draft', 'pending', 'sent', 'accepted', 'declined', 'cancelled', 'on hold'],
-    default: 'draft',
-  },
-  approved: {
-    type: Boolean,
-    default: false,
-  },
-  isExpired: {
-    type: Boolean,
-    default: false,
-  },
-  pdf: {
-    type: String,
-  },
-  files: [
-    {
-      id: String,
-      name: String,
-      path: String,
-      description: String,
-      isPublic: {
-        type: Boolean,
-        default: true,
-      },
-    },
-  ],
-  updated: {
-    type: Date,
-    default: Date.now,
-  },
-  created: {
-    type: Date,
-    default: Date.now,
-  },
+  { timestamps: true }
+);
+
+// auto quote number
+QuoteSchema.pre("save", function (next) {
+  if (!this.quoteNumber) {
+    const dt = new Date();
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const d = String(dt.getDate()).padStart(2, "0");
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    this.quoteNumber = `Q-${y}${m}${d}-${rand}`;
+  }
+  next();
 });
 
-quoteSchema.plugin(require('mongoose-autopopulate'));
-module.exports = mongoose.model('Quote', quoteSchema);
+module.exports = mongoose.models.Quote || mongoose.model("Quote", QuoteSchema);

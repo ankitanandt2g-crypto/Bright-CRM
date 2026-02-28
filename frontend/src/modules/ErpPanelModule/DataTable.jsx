@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect } from "react";
 import {
   EyeOutlined,
   EditOutlined,
@@ -7,29 +7,36 @@ import {
   RedoOutlined,
   PlusOutlined,
   EllipsisOutlined,
-  ArrowRightOutlined,
   ArrowLeftOutlined,
-} from '@ant-design/icons';
-import { Dropdown, Table, Button } from 'antd';
-import { PageHeader } from '@ant-design/pro-layout';
+} from "@ant-design/icons";
+import { Dropdown, Table, Button, message } from "antd";
+import { PageHeader } from "@ant-design/pro-layout";
 
-import AutoCompleteAsync from '@/components/AutoCompleteAsync';
-import { useSelector, useDispatch } from 'react-redux';
-import useLanguage from '@/locale/useLanguage';
-import { erp } from '@/redux/erp/actions';
-import { selectListItems } from '@/redux/erp/selectors';
-import { useErpContext } from '@/context/erp';
-import { generate as uniqueId } from 'shortid';
-import { useNavigate } from 'react-router-dom';
+import AutoCompleteAsync from "@/components/AutoCompleteAsync";
+import { useSelector, useDispatch } from "react-redux";
+import useLanguage from "@/locale/useLanguage";
+import { erp } from "@/redux/erp/actions";
+import { selectListItems } from "@/redux/erp/selectors";
+import { useErpContext } from "@/context/erp";
+import { useNavigate } from "react-router-dom";
 
-import { DOWNLOAD_BASE_URL } from '@/config/serverApiConfig';
+function joinPath(...parts) {
+  return parts
+    .filter(Boolean)
+    .map((p) => String(p).replace(/^\/+|\/+$/g, ""))
+    .join("/")
+    .replace(/^/, "/");
+}
 
 function AddNewItem({ config }) {
   const navigate = useNavigate();
-  const { ADD_NEW_ENTITY, entity } = config;
+  if (!config) return null;
+
+  const { ADD_NEW_ENTITY, entity, basePath = "" } = config;
 
   const handleClick = () => {
-    navigate(`/${entity.toLowerCase()}/create`);
+    const e = String(entity || "").toLowerCase();
+    navigate(joinPath(basePath, e, "create"));
   };
 
   return (
@@ -39,138 +46,206 @@ function AddNewItem({ config }) {
   );
 }
 
+// ✅ download helper (token + backend endpoint)
+async function downloadPdfFromApi({ entity, id, filename }) {
+  const token = localStorage.getItem("token");
+  const url = `http://localhost:8888/api/${entity}/download/${id}`;
+
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(txt || "Download failed");
+  }
+
+  const blob = await res.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename || `${entity}-${id}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  window.URL.revokeObjectURL(blobUrl);
+}
+
 export default function DataTable({ config, extra = [] }) {
   const translate = useLanguage();
-  let { entity, dataTableColumns, disableAdd = false, searchConfig } = config;
 
-  const { DATATABLE_TITLE } = config;
+  if (!config) {
+    return (
+      <div style={{ padding: 16 }}>
+        <b>ERP Module config missing.</b>
+        <div style={{ marginTop: 8 }}>
+          Fix: pass <code>config</code> into the module or set a fallback config.
+        </div>
+      </div>
+    );
+  }
+
+  const {
+    entity,
+    dataTableColumns: initialColumns = [],
+    disableAdd = false,
+    searchConfig,
+    basePath = "/admin",
+    DATATABLE_TITLE,
+  } = config;
+
+  const e = String(entity || "").toLowerCase();
 
   const { result: listResult, isLoading: listIsLoading } = useSelector(selectListItems);
-
-  const { pagination, items: dataSource } = listResult;
+  const { pagination = {}, items: dataSource = [] } = listResult || {};
 
   const { erpContextAction } = useErpContext();
   const { modal } = erpContextAction;
 
-  const items = [
-    {
-      label: translate('Show'),
-      key: 'read',
-      icon: <EyeOutlined />,
-    },
-    {
-      label: translate('Edit'),
-      key: 'edit',
-      icon: <EditOutlined />,
-    },
-    {
-      label: translate('Download'),
-      key: 'download',
-      icon: <FilePdfOutlined />,
-    },
-    ...extra,
-    {
-      type: 'divider',
-    },
-
-    {
-      label: translate('Delete'),
-      key: 'delete',
-      icon: <DeleteOutlined />,
-    },
-  ];
-
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+
+  const menuItems = [
+    { label: translate("Show"), key: "read", icon: <EyeOutlined /> },
+    { label: translate("Edit"), key: "edit", icon: <EditOutlined /> },
+    { label: translate("Download"), key: "download", icon: <FilePdfOutlined /> },
+    ...extra,
+    { type: "divider" },
+    { label: translate("Delete"), key: "delete", icon: <DeleteOutlined /> },
+  ];
 
   const handleRead = (record) => {
     dispatch(erp.currentItem({ data: record }));
-    navigate(`/${entity}/read/${record._id}`);
+    navigate(joinPath(basePath, e, "read", record._id));
   };
+
   const handleEdit = (record) => {
-    const data = { ...record };
-    dispatch(erp.currentAction({ actionType: 'update', data }));
-    navigate(`/${entity}/update/${record._id}`);
+    dispatch(erp.currentAction({ actionType: "update", data: { ...record } }));
+    navigate(joinPath(basePath, e, "update", record._id));
   };
-  const handleDownload = (record) => {
-    window.open(`${DOWNLOAD_BASE_URL}${entity}/${entity}-${record._id}.pdf`, '_blank');
+
+  const handleDownload = async (record) => {
+    try {
+      const filename =
+        e === "quote"
+          ? `Quote-${record?.quoteNumber || record?._id}.pdf`
+          : `${e}-${record?._id}.pdf`;
+
+      await downloadPdfFromApi({ entity: e, id: record._id, filename });
+      message.success("Download started");
+    } catch (err) {
+      message.error(err?.message || "Download failed");
+    }
   };
 
   const handleDelete = (record) => {
-    dispatch(erp.currentAction({ actionType: 'delete', data: record }));
+    dispatch(erp.currentAction({ actionType: "delete", data: record }));
     modal.open();
   };
 
   const handleRecordPayment = (record) => {
     dispatch(erp.currentItem({ data: record }));
-    navigate(`/invoice/pay/${record._id}`);
+    navigate(joinPath(basePath, "invoice", "record-payment", record._id));
   };
+
+  let dataTableColumns = Array.isArray(initialColumns) ? [...initialColumns] : [];
 
   dataTableColumns = [
     ...dataTableColumns,
     {
-      title: '',
-      key: 'action',
-      fixed: 'right',
+      title: "",
+      key: "action",
+      fixed: "right",
       render: (_, record) => (
         <Dropdown
           menu={{
-            items,
-            onClick: ({ key }) => {
+            items: menuItems,
+            onClick: async ({ key }) => {
               switch (key) {
-                case 'read':
+                case "read":
                   handleRead(record);
                   break;
-                case 'edit':
+                case "edit":
                   handleEdit(record);
                   break;
-                case 'download':
-                  handleDownload(record);
+                case "download":
+                  await handleDownload(record);
                   break;
-                case 'delete':
+                case "delete":
                   handleDelete(record);
                   break;
-                case 'recordPayment':
+                case "recordPayment":
                   handleRecordPayment(record);
                   break;
                 default:
                   break;
               }
-              // else if (key === '2')handleCloseTask
             },
           }}
-          trigger={['click']}
+          trigger={["click"]}
         >
           <EllipsisOutlined
-            style={{ cursor: 'pointer', fontSize: '24px' }}
-            onClick={(e) => e.preventDefault()}
+            style={{ cursor: "pointer", fontSize: "24px" }}
+            onClick={(ev) => ev.preventDefault()}
           />
         </Dropdown>
       ),
     },
   ];
 
-  const dispatch = useDispatch();
-
-  const handelDataTableLoad = (pagination) => {
-    const options = { page: pagination.current || 1, items: pagination.pageSize || 10 };
-    dispatch(erp.list({ entity, options }));
+  const handelDataTableLoad = (paginationObj) => {
+    const options = {
+      page: paginationObj?.current || 1,
+      items: paginationObj?.pageSize || 10,
+    };
+    dispatch(erp.list({ entity: e, options }));
   };
 
   const dispatcher = () => {
-    dispatch(erp.list({ entity }));
+    const options = { page: 1, items: 10 };
+    dispatch(erp.list({ entity: e, options }));
   };
 
   useEffect(() => {
-    const controller = new AbortController();
     dispatcher();
-    return () => {
-      controller.abort();
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filterTable = (value) => {
-    const options = { equal: value, filter: searchConfig?.entity };
-    dispatch(erp.list({ entity, options }));
+  const filterTable = (value, option) => {
+    try {
+      // clear
+      if (!value && !option) {
+        dispatch(erp.list({ entity: e, options: { page: 1, items: 10 } }));
+        return;
+      }
+
+      const equal =
+        typeof value === "string"
+          ? value
+          : value?.value || value?._id || value?.name || option?.value || "";
+
+      if (!equal) {
+        dispatch(erp.list({ entity: e, options: { page: 1, items: 10 } }));
+        return;
+      }
+
+      dispatch(
+        erp.list({
+          entity: e,
+          options: {
+            equal: String(equal),
+            filter: searchConfig?.entity,
+            page: 1,
+            items: 10,
+          },
+        })
+      );
+    } catch (err) {
+      console.error("filterTable error:", err);
+      dispatch(erp.list({ entity: e, options: { page: 1, items: 10 } }));
+    }
   };
 
   return (
@@ -182,25 +257,19 @@ export default function DataTable({ config, extra = [] }) {
         backIcon={<ArrowLeftOutlined />}
         extra={[
           <AutoCompleteAsync
-            key={`${uniqueId()}`}
+            key="erp-search"
             entity={searchConfig?.entity}
-            displayLabels={['name']}
-            searchFields={'name'}
+            displayLabels={["name"]}
+            searchFields={"name"}
             onChange={filterTable}
-            // redirectLabel={'Add New Client'}
-            // withRedirect
-            // urlToRedirect={'/customer'}
           />,
-          <Button onClick={handelDataTableLoad} key={`${uniqueId()}`} icon={<RedoOutlined />}>
-            {translate('Refresh')}
+          <Button onClick={dispatcher} key="erp-refresh" icon={<RedoOutlined />}>
+            {translate("Refresh")}
           </Button>,
-
-          !disableAdd && <AddNewItem config={config} key={`${uniqueId()}`} />,
+          !disableAdd && <AddNewItem config={config} key="erp-add" />,
         ]}
-        style={{
-          padding: '20px 0px',
-        }}
-      ></PageHeader>
+        style={{ padding: "20px 0px" }}
+      />
 
       <Table
         columns={dataTableColumns}

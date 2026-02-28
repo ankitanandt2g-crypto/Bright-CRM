@@ -3,15 +3,15 @@ import { Button, Table, Space, Popconfirm, Select, Tag, message } from "antd";
 import { useNavigate } from "react-router-dom";
 
 import LeadForm from "./LeadForm";
-import { getLeads, createLead, updateLead, deleteLead, createJobFromLead } from "./leadApi";
+import { getLeads, createLead, updateLead, deleteLead } from "./leadApi";
 
 const { Option } = Select;
 
 // ✅ status color helper
 const statusColor = (status) => {
   switch (status) {
-    case "Converted":
-      return "green";
+    case "Quoted":
+      return "purple";
     case "Qualified":
       return "blue";
     case "Contacted":
@@ -83,16 +83,11 @@ export default function Lead() {
     }
   };
 
-  // ✅ Lead -> Job (+ Customer auto-create happens in backend)
-  const handleConvertToJob = async (leadId) => {
-    try {
-      await createJobFromLead(leadId);
-      message.success("Job created + Customer added");
-      await fetchLeads();
-      navigate("/admin/jobs");
-    } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Convert failed");
-    }
+  // ✅ Lead -> Quote (Correct flow as per PPT/SOW)
+  const handleCreateQuote = (leadRecord) => {
+    navigate("/admin/quotes/create", {
+      state: { lead: leadRecord },
+    });
   };
 
   const columns = [
@@ -124,7 +119,7 @@ export default function Lead() {
             <Option value="New">New</Option>
             <Option value="Contacted">Contacted</Option>
             <Option value="Qualified">Qualified</Option>
-            <Option value="Converted">Converted</Option>
+            <Option value="Quoted">Quoted</Option>
             <Option value="Lost">Lost</Option>
           </Select>
         </Space>
@@ -134,7 +129,7 @@ export default function Lead() {
     {
       title: "Actions",
       render: (_, record) => (
-        <Space>
+        <Space wrap>
           <Button
             onClick={() => {
               setEditData(record);
@@ -148,12 +143,9 @@ export default function Lead() {
             <Button danger>Delete</Button>
           </Popconfirm>
 
-          <Button
-            type={record.status === "Converted" ? "default" : "primary"}
-            disabled={record.status === "Converted"}
-            onClick={() => handleConvertToJob(record._id)}
-          >
-            {record.status === "Converted" ? "Converted" : "Convert to Job"}
+          {/* ✅ Correct Flow Button */}
+          <Button type="primary" onClick={() => handleCreateQuote(record)}>
+            Create Quote
           </Button>
         </Space>
       ),

@@ -1,288 +1,180 @@
-import { useState, useEffect, useRef } from 'react';
-import dayjs from 'dayjs';
-import { Form, Input, InputNumber, Button, Select, Divider, Row, Col } from 'antd';
+import React, { useEffect } from "react";
+import {
+  Form,
+  Input,
+  Row,
+  Col,
+  Select,
+  InputNumber,
+  Divider,
+  Button,
+  Space,
+} from "antd";
 
-import { PlusOutlined } from '@ant-design/icons';
+const { TextArea } = Input;
 
-import { DatePicker } from 'antd';
+const STATUS = [
+  "Draft",
+  "Sent",
+  "Client Viewed",
+  "Approved",
+  "Rejected",
+  "Expired",
+  "Converted to Job",
+];
 
-import AutoCompleteAsync from '@/components/AutoCompleteAsync';
-
-import ItemRow from '@/modules/ErpPanelModule/ItemRow';
-
-import MoneyInputFormItem from '@/components/MoneyInputFormItem';
-import { selectFinanceSettings } from '@/redux/settings/selectors';
-import { useDate } from '@/settings';
-import useLanguage from '@/locale/useLanguage';
-
-import calculate from '@/utils/calculate';
-import { useSelector } from 'react-redux';
-import SelectAsync from '@/components/SelectAsync';
-
-export default function QuoteForm({ subTotal = 0, current = null }) {
-  const { last_quote_number } = useSelector(selectFinanceSettings);
-
-  if (last_quote_number === undefined) {
-    return <></>;
-  }
-
-  return <LoadQuoteForm subTotal={subTotal} current={current} />;
-}
-
-function LoadQuoteForm({ subTotal = 0, current = null }) {
-  const translate = useLanguage();
-  const { dateFormat } = useDate();
-  const { last_quote_number } = useSelector(selectFinanceSettings);
-  const [lastNumber, setLastNumber] = useState(() => last_quote_number + 1);
-
-  const [total, setTotal] = useState(0);
-  const [taxRate, setTaxRate] = useState(0);
-  const [taxTotal, setTaxTotal] = useState(0);
-  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
-  const handelTaxChange = (value) => {
-    setTaxRate(value / 100);
-  };
-
+export default function QuoteForm({
+  form,
+  initialValues,
+  onSubmit,
+  onCancel,
+  loading = false,
+}) {
   useEffect(() => {
-    if (current) {
-      const { taxRate = 0, year, number } = current;
-      setTaxRate(taxRate / 100);
-      setCurrentYear(year);
-      setLastNumber(number);
-    }
-  }, [current]);
-  useEffect(() => {
-    const currentTotal = calculate.add(calculate.multiply(subTotal, taxRate), subTotal);
-    setTaxTotal(Number.parseFloat(calculate.multiply(subTotal, taxRate)));
-    setTotal(Number.parseFloat(currentTotal));
-  }, [subTotal, taxRate]);
-
-  const addField = useRef(false);
-
-  useEffect(() => {
-    addField.current.click();
-  }, []);
+    if (initialValues) form.setFieldsValue(initialValues);
+  }, [initialValues, form]);
 
   return (
-    <>
-      <Row gutter={[12, 0]}>
-        <Col className="gutter-row" span={8}>
-          <Form.Item
-            name="client"
-            label={translate('Client')}
-            rules={[
-              {
-                required: true,
-              },
-            ]}
-          >
-            <AutoCompleteAsync
-              entity={'client'}
-              displayLabels={['name']}
-              searchFields={'name'}
-              redirectLabel={'Add New Client'}
-              withRedirect
-              urlToRedirect={'/customer'}
-            />
-          </Form.Item>
-        </Col>
-        <Col className="gutter-row" span={5}>
-          <Form.Item
-            label={translate('number')}
-            name="number"
-            initialValue={lastNumber}
-            rules={[
-              {
-                required: true,
-              },
-            ]}
-          >
-            <InputNumber min={1} style={{ width: '100%' }} />
-          </Form.Item>
-        </Col>
-        <Col className="gutter-row" span={5}>
-          <Form.Item
-            label={translate('year')}
-            name="year"
-            initialValue={currentYear}
-            rules={[
-              {
-                required: true,
-              },
-            ]}
-          >
-            <InputNumber style={{ width: '100%' }} />
-          </Form.Item>
-        </Col>
+    <Form form={form} layout="vertical" onFinish={onSubmit}>
+      {/* ✅ Hidden leadId for backend mapping */}
+      <Form.Item name="leadId" hidden>
+        <Input />
+      </Form.Item>
 
-        <Col className="gutter-row" span={6}>
-          <Form.Item
-            label={translate('status')}
-            name="status"
-            rules={[
-              {
-                required: false,
-              },
-            ]}
-            initialValue={'draft'}
-          >
-            <Select
-              options={[
-                { value: 'draft', label: translate('Draft') },
-                { value: 'pending', label: translate('Pending') },
-                { value: 'sent', label: translate('Sent') },
-                { value: 'accepted', label: translate('Accepted') },
-                { value: 'declined', label: translate('Declined') },
-              ]}
-            ></Select>
+      <Divider orientation="left">Customer (from Lead)</Divider>
+      <Row gutter={16}>
+        <Col xs={24} md={12}>
+          <Form.Item label="Client Name" name="customerName" rules={[{ required: true }]}>
+            <Input disabled />
           </Form.Item>
         </Col>
-
-        <Col className="gutter-row" span={8}>
-          <Form.Item
-            name="date"
-            label={translate('Date')}
-            rules={[
-              {
-                required: true,
-                type: 'object',
-              },
-            ]}
-            initialValue={dayjs()}
-          >
-            <DatePicker style={{ width: '100%' }} format={dateFormat} />
+        <Col xs={24} md={12}>
+          <Form.Item label="Contact Person" name="contactPerson">
+            <Input disabled />
           </Form.Item>
         </Col>
-        <Col className="gutter-row" span={6}>
-          <Form.Item
-            name="expiredDate"
-            label={translate('Expire Date')}
-            rules={[
-              {
-                required: true,
-                type: 'object',
-              },
-            ]}
-            initialValue={dayjs().add(30, 'days')}
-          >
-            <DatePicker style={{ width: '100%' }} format={dateFormat} />
+        <Col xs={24} md={12}>
+          <Form.Item label="Phone" name="phone" rules={[{ required: true }]}>
+            <Input disabled />
           </Form.Item>
         </Col>
-        <Col className="gutter-row" span={10}>
-          <Form.Item label={translate('Note')} name="notes">
-            <Input />
+        <Col xs={24} md={12}>
+          <Form.Item label="Email" name="email">
+            <Input disabled />
           </Form.Item>
         </Col>
       </Row>
-      <Divider dashed />
-      <Row gutter={[12, 12]} style={{ position: 'relative' }}>
-        <Col className="gutter-row" span={5}>
-          <p>{translate('Item')}</p>
+
+      <Divider orientation="left">Project</Divider>
+      <Row gutter={16}>
+        <Col xs={24}>
+          <Form.Item label="Site Address" name="siteAddress" rules={[{ required: true }]}>
+            <TextArea rows={2} disabled />
+          </Form.Item>
         </Col>
-        <Col className="gutter-row" span={7}>
-          <p>{translate('Description')}</p>
+
+        <Col xs={24} md={8}>
+          <Form.Item label="Project Type" name="projectType" rules={[{ required: true }]}>
+            <Input disabled />
+          </Form.Item>
         </Col>
-        <Col className="gutter-row" span={3}>
-          <p>{translate('Quantity')}</p>{' '}
+
+        <Col xs={24} md={8}>
+          <Form.Item label="Balustrade Type" name="balustradeType" rules={[{ required: true }]}>
+            <Input disabled />
+          </Form.Item>
         </Col>
-        <Col className="gutter-row" span={4}>
-          <p>{translate('Price')}</p>
+
+        <Col xs={24} md={8}>
+          <Form.Item label="Lead Source" name="leadSource">
+            <Input disabled />
+          </Form.Item>
         </Col>
-        <Col className="gutter-row" span={5}>
-          <p>{translate('Total')}</p>
+
+        <Col xs={24} md={8}>
+          <Form.Item label="Status" name="status" rules={[{ required: true }]}>
+            <Select options={STATUS.map((s) => ({ value: s, label: s }))} />
+          </Form.Item>
         </Col>
       </Row>
-      <Form.List name="items">
-        {(fields, { add, remove }) => (
-          <>
-            {fields.map((field) => (
-              <ItemRow key={field.key} remove={remove} field={field} current={current}></ItemRow>
-            ))}
-            <Form.Item>
-              <Button
-                type="dashed"
-                onClick={() => add()}
-                block
-                icon={<PlusOutlined />}
-                ref={addField}
-              >
-                {translate('Add field')}
-              </Button>
-            </Form.Item>
-          </>
-        )}
-      </Form.List>
-      <Divider dashed />
-      <div style={{ position: 'relative', width: ' 100%', float: 'right' }}>
-        <Row gutter={[12, -5]}>
-          <Col className="gutter-row" span={5}>
-            <Form.Item>
-              <Button type="primary" htmlType="submit" icon={<PlusOutlined />} block>
-                {translate('Save')}
-              </Button>
-            </Form.Item>
-          </Col>
-          <Col className="gutter-row" span={4} offset={10}>
-            <p
-              style={{
-                paddingLeft: '12px',
-                paddingTop: '5px',
-                margin: 0,
-                textAlign: 'right',
-              }}
-            >
-              {translate('Sub Total')} :
-            </p>
-          </Col>
-          <Col className="gutter-row" span={5}>
-            <MoneyInputFormItem readOnly value={subTotal} />
-          </Col>
-        </Row>
-        <Row gutter={[12, -5]}>
-          <Col className="gutter-row" span={4} offset={15}>
-            <Form.Item
-              name="taxRate"
-              rules={[
-                {
-                  required: true,
-                },
-              ]}
-            >
-              <SelectAsync
-                value={taxRate}
-                onChange={handelTaxChange}
-                entity={'taxes'}
-                outputValue={'taxValue'}
-                displayLabels={['taxName']}
-                withRedirect={true}
-                urlToRedirect="/taxes"
-                redirectLabel={translate('Add New Tax')}
-                placeholder={translate('Select Tax Value')}
-              />
-            </Form.Item>
-          </Col>
-          <Col className="gutter-row" span={5}>
-            <MoneyInputFormItem readOnly value={taxTotal} />
-          </Col>
-        </Row>
-        <Row gutter={[12, -5]}>
-          <Col className="gutter-row" span={4} offset={15}>
-            <p
-              style={{
-                paddingLeft: '12px',
-                paddingTop: '5px',
-                margin: 0,
-                textAlign: 'right',
-              }}
-            >
-              {translate('Total')} :
-            </p>
-          </Col>
-          <Col className="gutter-row" span={5}>
-            <MoneyInputFormItem readOnly value={total} />
-          </Col>
-        </Row>
-      </div>
-    </>
+
+      <Divider orientation="left">Scope (Mandatory)</Divider>
+      <Form.Item label="Scope Definition" name="scope" rules={[{ required: true }]}>
+        <TextArea rows={3} placeholder="Detailed work breakdown..." />
+      </Form.Item>
+
+      <Row gutter={16}>
+        <Col xs={24} md={12}>
+          <Form.Item label="Inclusions" name="inclusions" rules={[{ required: true }]}>
+            <TextArea rows={4} placeholder="What is included?" />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={12}>
+          <Form.Item label="Exclusions" name="exclusions" rules={[{ required: true }]}>
+            <TextArea rows={4} placeholder="What is excluded?" />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Form.Item label="Assumptions" name="assumptions">
+        <TextArea rows={3} placeholder="Assumptions / constraints..." />
+      </Form.Item>
+
+      <Divider orientation="left">Estimation</Divider>
+      <Row gutter={16}>
+        <Col xs={24} md={6}>
+          <Form.Item label="Material Cost" name="materialCost">
+            <InputNumber style={{ width: "100%" }} min={0} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={6}>
+          <Form.Item label="Labor Cost" name="laborCost">
+            <InputNumber style={{ width: "100%" }} min={0} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={6}>
+          <Form.Item label="Installation Cost" name="installCost">
+            <InputNumber style={{ width: "100%" }} min={0} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={6}>
+          <Form.Item label="Total Quote Value (Estimated)" name="totalAmount" rules={[{ required: true }]}>
+            <InputNumber style={{ width: "100%" }} min={0} />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Divider orientation="left">Planning Estimates</Divider>
+      <Row gutter={16}>
+        <Col xs={24} md={6}>
+          <Form.Item label="Expected Drafting Hours" name="expectedDraftHours">
+            <InputNumber style={{ width: "100%" }} min={0} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={6}>
+          <Form.Item label="Expected Fabrication Hours" name="expectedFabHours">
+            <InputNumber style={{ width: "100%" }} min={0} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={6}>
+          <Form.Item label="Expected Installation Hours" name="expectedInstallHours">
+            <InputNumber style={{ width: "100%" }} min={0} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={6}>
+          <Form.Item label="Crew Size" name="crewSize">
+            <InputNumber style={{ width: "100%" }} min={1} />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Divider />
+      <Space>
+        <Button type="primary" htmlType="submit" loading={loading}>
+          Save Quote
+        </Button>
+        <Button onClick={onCancel}>Cancel</Button>
+      </Space>
+    </Form>
   );
 }

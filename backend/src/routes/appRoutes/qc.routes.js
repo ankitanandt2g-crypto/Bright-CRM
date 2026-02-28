@@ -14,3 +14,5 @@ router.patch("/update/:id", updateQcItem);
 router.delete("/delete/:id", deleteQcItem);
 
 module.exports = router; // ✅ MUST be this
+
+

@@ -2,25 +2,23 @@ import { useState } from "react";
 import { Card, Form, Input, Button, Select, Typography, message } from "antd";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { useDispatch } from "react-redux";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-// ✅ backend endpoint
 const API = "http://localhost:8888/api/auth/login";
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState("admin");
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const onFinish = async (values) => {
     try {
       setLoading(true);
 
-      // identifier:
-      // admin/customer => email
-      // worker => workerId
       const payload = {
         role: values.role,
         identifier: values.identifier?.trim(),
@@ -35,7 +33,6 @@ export default function Login() {
         return;
       }
 
-      // ✅ save token + user (VERY IMPORTANT)
       const token = data?.result?.token;
       const user = data?.result?.user;
 
@@ -44,17 +41,54 @@ export default function Login() {
         return;
       }
 
+      // ✅ 1) Save token/user in multiple keys (Idurar modules may read different keys)
       localStorage.setItem("token", token);
+      localStorage.setItem("authToken", token);
+      localStorage.setItem("jwt", token);
+
       localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("currentUser", JSON.stringify(user));
+
+      // ✅ Often templates store a combined auth object
+      localStorage.setItem(
+        "auth",
+        JSON.stringify({
+          token,
+          user,
+          current: user,
+          isLoggedIn: true,
+          loggedIn: true,
+          role: user.role,
+        })
+      );
+
+      // ✅ 2) Set axios default header globally (VERY IMPORTANT)
+      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+
+      // ✅ 3) Redux backup dispatch (in case modules rely on redux state)
+      const authPayload = {
+        token,
+        user,
+        current: user,
+        isLoggedIn: true,
+        loggedIn: true,
+        role: user.role,
+      };
+
+      dispatch({ type: "AUTH_SUCCESS", payload: authPayload });
+      dispatch({ type: "LOGIN_SUCCESS", payload: authPayload });
+      dispatch({ type: "AUTH_LOGIN_SUCCESS", payload: authPayload });
 
       message.success("Login successful");
 
       // ✅ role based redirect
-      if (user.role === "admin") navigate("/admin", { replace: true });
+      if (user.role === "admin") navigate("/admin/dashboard", { replace: true });
       else if (user.role === "worker") navigate("/worker", { replace: true });
       else navigate("/portal", { replace: true });
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Network error");
+      message.error(
+        err?.response?.data?.message || err?.message || "Network error"
+      );
     } finally {
       setLoading(false);
     }
@@ -94,7 +128,12 @@ export default function Login() {
           <Form.Item
             label={role === "worker" ? "Worker ID" : "Email"}
             name="identifier"
-            rules={[{ required: true, message: role === "worker" ? "Worker ID required" : "Email required" }]}
+            rules={[
+              {
+                required: true,
+                message: role === "worker" ? "Worker ID required" : "Email required",
+              },
+            ]}
           >
             <Input placeholder={role === "worker" ? "e.g. WRK-001" : "name@email.com"} />
           </Form.Item>

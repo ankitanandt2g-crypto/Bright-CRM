@@ -1,12 +1,16 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 
 export default function CustomerProtectedRoute({ children }) {
-  const token = localStorage.getItem("customer_token");
+  const location = useLocation();
 
-  if (!token) {
-    return <Navigate to="/portal/login" replace />;
+  const token = localStorage.getItem("token");
+  const role = localStorage.getItem("role"); // "customer" expected
+
+  if (!token || role !== "customer") {
+    return <Navigate to="/portal/login" replace state={{ from: location.pathname }} />;
   }
 
+  // ✅ IMPORTANT: render wrapped layout/page
   return children;
 }

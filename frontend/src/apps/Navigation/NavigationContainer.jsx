@@ -24,6 +24,7 @@ import {
   ShopOutlined,
   FilterOutlined,
   ReconciliationOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 
 const { Sider } = Layout;
@@ -53,93 +54,100 @@ function Sidebar({ collapsible, isMobile = false, basePath = "" }) {
   // ✅ helper: make links work inside /admin/*
   const go = (p) => `${basePath}${p}`;
 
-  const items = [
-    // DASHBOARD
-    {
-      key: "dashboard",
-      icon: <DashboardOutlined />,
-      label: <Link to={go("/")}>Dashboard</Link>,
-    },
+const items = [
+  // DASHBOARD
+  {
+    key: "dashboard",
+    icon: <DashboardOutlined />,
+    label: <Link to={go("/")}>Dashboard</Link>,
+  },
 
-    // LEADS
-    {
-      key: "lead",
-      icon: <UserOutlined />,
-      label: <Link to={go("/lead")}>Leads</Link>,
-    },
+  // LEADS
+  {
+    key: "lead",
+    icon: <UserOutlined />,
+    label: <Link to={go("/lead")}>Leads</Link>,
+  },
 
-    // OPERATIONS
-    {
-      key: "jobs",
-      icon: <FileOutlined />,
-      label: <Link to={go("/jobs")}>Jobs</Link>,
-    },
-    {
-      key: "kanban",
-      icon: <FilterOutlined />,
-      label: <Link to={go("/kanban")}>Kanban Board</Link>,
-    },
-    {
-      key: "planning",
-      icon: <TagOutlined />,
-      label: <Link to={go("/planning")}>Planning</Link>,
-    },
-    {
-      key: "fabrication",
-      icon: <TagsOutlined />,
-      label: <Link to={go("/fabrication")}>Fabrication</Link>,
-    },
-    {
-      key: "qc",
-      icon: <ContainerOutlined />,
-      label: <Link to={go("/qc")}>Quality Control</Link>,
-    },
-    {
-      key: "installation",
-      icon: <ShopOutlined />,
-      label: <Link to={go("/installation")}>Installation</Link>,
-    },
+  // QUOTES ✅ ADD THIS
+  {
+    key: "quotes",
+    icon: <FileTextOutlined />,
+    label: <Link to={go("/quotes")}>Quotes</Link>,
+  },
 
-    // HRMS
-    {
-      key: "attendance",
-      icon: <UserOutlined />,
-      label: <Link to={go("/attendance")}>Attendance</Link>,
-    },
+  // OPERATIONS
+  {
+    key: "jobs",
+    icon: <FileOutlined />,
+    label: <Link to={go("/jobs")}>Jobs</Link>,
+  },
+  {
+    key: "kanban",
+    icon: <FilterOutlined />,
+    label: <Link to={go("/kanban")}>Task Pipeline</Link>,
+  },
+  {
+    key: "planning",
+    icon: <TagOutlined />,
+    label: <Link to={go("/planning")}>Planning</Link>,
+  },
+  {
+    key: "fabrication",
+    icon: <TagsOutlined />,
+    label: <Link to={go("/fabrication")}>Fabrication</Link>,
+  },
+  {
+    key: "qc",
+    icon: <ContainerOutlined />,
+    label: <Link to={go("/qc")}>Quality Control</Link>,
+  },
+  {
+    key: "installation",
+    icon: <ShopOutlined />,
+    label: <Link to={go("/installation")}>Installation</Link>,
+  },
 
-    // CRM
-    {
-      key: "customer",
-      icon: <CustomerServiceOutlined />,
-      label: <Link to={go("/customer")}>Customers</Link>,
-    },
+  // HRMS
+  {
+    key: "attendance",
+    icon: <UserOutlined />,
+    label: <Link to={go("/attendance")}>Attendance</Link>,
+  },
 
-    // FINANCE
-    {
-      key: "invoice",
-      icon: <ContainerOutlined />,
-      label: <Link to={go("/invoice")}>Invoices</Link>,
-    },
-    {
-      key: "payment",
-      icon: <CreditCardOutlined />,
-      label: <Link to={go("/payment")}>Payments</Link>,
-    },
+  // CRM
+  {
+    key: "customer",
+    icon: <CustomerServiceOutlined />,
+    label: <Link to={go("/customer")}>Customers</Link>,
+  },
 
-    // SETTINGS
-    {
-      key: "generalSettings",
-      icon: <SettingOutlined />,
-      label: <Link to={go("/settings")}>Settings</Link>,
-    },
+  // FINANCE
+  {
+    key: "invoice",
+    icon: <ContainerOutlined />,
+    label: <Link to={go("/invoice")}>Invoices</Link>,
+  },
+  {
+    key: "payment",
+    icon: <CreditCardOutlined />,
+    label: <Link to={go("/payment")}>Payments</Link>,
+  },
 
-    // ABOUT (if you had it before)
-    {
-      key: "about",
-      icon: <ReconciliationOutlined />,
-      label: <Link to={go("/about")}>About</Link>,
-    },
-  ];
+  // SETTINGS
+  {
+    key: "settings",
+    icon: <SettingOutlined />,
+    label: <Link to={go("/settings/company")}>Settings</Link>,
+  },
+
+  // ABOUT
+  {
+    key: "about",
+    icon: <ReconciliationOutlined />,
+    label: <Link to={go("/about")}>About</Link>,
+  },
+];
 
   useEffect(() => {
     if (!location) return;
