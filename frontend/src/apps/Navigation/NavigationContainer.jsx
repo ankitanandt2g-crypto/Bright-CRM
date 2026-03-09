@@ -51,115 +51,132 @@ function Sidebar({ collapsible, isMobile = false, basePath = "" }) {
 
   const translate = useLanguage();
 
-  // ✅ helper: make links work inside /admin/*
   const go = (p) => `${basePath}${p}`;
 
-const items = [
-  // DASHBOARD
-  {
-    key: "dashboard",
-    icon: <DashboardOutlined />,
-    label: <Link to={go("/")}>Dashboard</Link>,
-  },
+  const items = [
+    {
+      key: "dashboard",
+      icon: <DashboardOutlined />,
+      label: <Link to={go("/")}>Dashboard</Link>,
+    },
+    {
+      key: "lead",
+      icon: <UserOutlined />,
+      label: <Link to={go("/lead")}>Leads</Link>,
+    },
+    {
+      key: "quotes",
+      icon: <FileTextOutlined />,
+      label: <Link to={go("/quotes")}>Quotes</Link>,
+    },
+    {
+      key: "jobs",
+      icon: <FileOutlined />,
+      label: <Link to={go("/jobs")}>Jobs</Link>,
+    },
 
-  // LEADS
-  {
-    key: "lead",
-    icon: <UserOutlined />,
-    label: <Link to={go("/lead")}>Leads</Link>,
-  },
+    // ✅ Site Measurement
+    {
+      key: "site-measurement",
+      icon: <TagOutlined />,
+      label: <Link to={go("/site-measurement")}>Site Measurement</Link>,
+    },
 
-  // QUOTES ✅ ADD THIS
-  {
-    key: "quotes",
-    icon: <FileTextOutlined />,
-    label: <Link to={go("/quotes")}>Quotes</Link>,
-  },
+    // ✅ Planning
+    {
+      key: "planning",
+      icon: <TagOutlined />,
+      label: <Link to={go("/planning")}>Planning</Link>,
+    },
 
-  // OPERATIONS
-  {
-    key: "jobs",
-    icon: <FileOutlined />,
-    label: <Link to={go("/jobs")}>Jobs</Link>,
-  },
-  {
-    key: "kanban",
-    icon: <FilterOutlined />,
-    label: <Link to={go("/kanban")}>Task Pipeline</Link>,
-  },
-  {
-    key: "planning",
-    icon: <TagOutlined />,
-    label: <Link to={go("/planning")}>Planning</Link>,
-  },
-  {
-    key: "fabrication",
-    icon: <TagsOutlined />,
-    label: <Link to={go("/fabrication")}>Fabrication</Link>,
-  },
-  {
-    key: "qc",
-    icon: <ContainerOutlined />,
-    label: <Link to={go("/qc")}>Quality Control</Link>,
-  },
-  {
-    key: "installation",
-    icon: <ShopOutlined />,
-    label: <Link to={go("/installation")}>Installation</Link>,
-  },
+    // ✅ Drafting
+    {
+      key: "drafting",
+      icon: <FileTextOutlined />,
+      label: <Link to={go("/drafting")}>Drafting</Link>,
+    },
 
-  // HRMS
-  {
-    key: "attendance",
-    icon: <UserOutlined />,
-    label: <Link to={go("/attendance")}>Attendance</Link>,
-  },
+    // ✅ Job Scheduling (only Material Purchase inside)
+    {
+      key: "job-scheduling",
+      icon: <FilterOutlined />,
+      label: "Job Scheduling",
+      children: [
+        {
+          key: "material-purchase",
+          label: <Link to={go("/material-purchase")}>Material Purchase</Link>,
+        },
+      ],
+    },
 
-  // CRM
-  {
-    key: "customer",
-    icon: <CustomerServiceOutlined />,
-    label: <Link to={go("/customer")}>Customers</Link>,
-  },
+    // ✅ Fabrication (outside)
+    {
+      key: "fabrication",
+      icon: <TagsOutlined />,
+      label: <Link to={go("/fabrication")}>Fabrication</Link>,
+    },
 
-  // FINANCE
-  {
-    key: "invoice",
-    icon: <ContainerOutlined />,
-    label: <Link to={go("/invoice")}>Invoices</Link>,
-  },
-  {
-    key: "payment",
-    icon: <CreditCardOutlined />,
-    label: <Link to={go("/payment")}>Payments</Link>,
-  },
+    // ✅ QC (outside)
+    {
+      key: "qc",
+      icon: <ContainerOutlined />,
+      label: <Link to={go("/qc")}>Quality Control</Link>,
+    },
 
-  // SETTINGS
-  {
-    key: "settings",
-    icon: <SettingOutlined />,
-    label: <Link to={go("/settings/company")}>Settings</Link>,
-  },
+    // ✅ Installation (same as before)
+    {
+      key: "installation",
+      icon: <ShopOutlined />,
+      label: <Link to={go("/installation")}>Installation</Link>,
+    },
 
-  // ABOUT
-  {
-    key: "about",
-    icon: <ReconciliationOutlined />,
-    label: <Link to={go("/about")}>About</Link>,
-  },
-];
+    {
+      key: "attendance",
+      icon: <UserOutlined />,
+      label: <Link to={go("/attendance")}>Attendance</Link>,
+    },
+    {
+      key: "customer",
+      icon: <CustomerServiceOutlined />,
+      label: <Link to={go("/customer")}>Customers</Link>,
+    },
+    {
+      key: "invoice",
+      icon: <ContainerOutlined />,
+      label: <Link to={go("/invoice")}>Invoices</Link>,
+    },
+    {
+      key: "payment",
+      icon: <CreditCardOutlined />,
+      label: <Link to={go("/payment")}>Payments</Link>,
+    },
+    {
+      key: "settings",
+      icon: <SettingOutlined />,
+      label: <Link to={go("/settings/company")}>Settings</Link>,
+    },
+    {
+      key: "about",
+      icon: <ReconciliationOutlined />,
+      label: <Link to={go("/about")}>About</Link>,
+    },
+  ];
 
   useEffect(() => {
     if (!location) return;
 
-    // ✅ when inside /admin/... make selected key correct
     const path = location.pathname;
+    const cleaned =
+      basePath && path.startsWith(basePath)
+        ? path.slice(basePath.length)
+        : path;
 
-    // basePath removed from currentPath for selection
-    const cleaned = basePath && path.startsWith(basePath) ? path.slice(basePath.length) : path;
-
-    if (cleaned === "/" || cleaned === "") setCurrentPath("dashboard");
-    else setCurrentPath(cleaned.startsWith("/") ? cleaned.slice(1) : cleaned);
+    if (cleaned === "/" || cleaned === "")
+      setCurrentPath("dashboard");
+    else
+      setCurrentPath(
+        cleaned.startsWith("/") ? cleaned.slice(1) : cleaned
+      );
   }, [location.pathname, basePath]);
 
   useEffect(() => {
@@ -194,7 +211,11 @@ const items = [
         onClick={() => navigate(go("/"))}
         style={{ cursor: "pointer" }}
       >
-        <img src={logoIcon} alt="Logo" style={{ marginLeft: "-5px", height: "40px" }} />
+        <img
+          src={logoIcon}
+          alt="Logo"
+          style={{ marginLeft: "-5px", height: "40px" }}
+        />
 
         {!showLogoApp && (
           <img
