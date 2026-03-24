@@ -1,128 +1,201 @@
-const Qc = require("@/models/appModels/Qc");
+const mongoose = require("mongoose");
 
-// ✅ GET /api/qc/list?jobId=xxxx
-exports.listQcItems = async (req, res) => {
+const Qc = mongoose.models.Qc;
+const Job = mongoose.models.Job;
+
+if (!Qc) throw new Error("Qc model not loaded");
+if (!Job) throw new Error("Job model not loaded");
+
+const syncJobQcStage = async (jobObjectId) => {
+  if (!jobObjectId) return;
+
+  const job = await Job.findById(jobObjectId);
+  if (!job) return;
+
+  // aage ke stages ko backward mat karo
+  if (["Installation", "Closure"].includes(job.stage)) {
+    return;
+  }
+
+  await Job.findByIdAndUpdate(
+    jobObjectId,
+    {
+      stage: "Quality Control",
+      status: "Active",
+    },
+    { new: true }
+  );
+};
+
+// GET /api/qc/list/:jobId
+exports.listByJob = async (req, res) => {
   try {
-    const { jobId } = req.query;
+    const { jobId } = req.params;
 
     if (!jobId) {
       return res.status(400).json({
         success: false,
-        result: null,
-        message: "jobId is required in query",
+        result: [],
+        message: "jobId is required",
       });
     }
 
-    const items = await Qc.find({ jobId }).sort({ createdAt: -1 });
+    const result = await Qc.find({ jobId }).sort({ createdAt: -1 });
 
-    return res.json({
+    return res.status(200).json({
       success: true,
-      result: items,
-      message: items.length ? "QC items fetched" : "Collection is Empty",
+      result,
+      message: "Qc items fetched",
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      result: [],
+      message: err.message,
+    });
+  }
+};
+
+// GET /api/qc/read/:id
+exports.read = async (req, res) => {
+  try {
+    const result = await Qc.findById(req.params.id);
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        result: null,
+        message: "Qc item not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      result,
+      message: "Qc item fetched",
     });
   } catch (err) {
     return res.status(500).json({
       success: false,
       result: null,
-      message: err.message || "Failed to fetch QC items",
+      message: err.message,
     });
   }
 };
 
-// ✅ POST /api/qc/create
-exports.createQcItem = async (req, res) => {
+// POST /api/qc/create
+exports.create = async (req, res) => {
   try {
-    const { jobId, item, checked, passed, rejected } = req.body;
+    const payload = req.body;
 
-    if (!jobId || !item) {
+    if (!payload.jobId) {
       return res.status(400).json({
         success: false,
         result: null,
-        message: "jobId and item are required",
+        message: "jobId is required",
       });
     }
 
-    if (Number(checked || 0) !== Number(passed || 0) + Number(rejected || 0)) {
+    if (!payload.itemName) {
       return res.status(400).json({
         success: false,
         result: null,
-        message: "passed + rejected must equal checked",
+        message: "itemName is required",
       });
     }
 
-    const created = await Qc.create(req.body);
+    const job = await Job.findById(payload.jobId);
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        result: null,
+        message: "Job not found",
+      });
+    }
+
+    const created = await Qc.create({
+      jobId: payload.jobId,
+      itemName: payload.itemName,
+      inspectionType: payload.inspectionType || "",
+      checkedBy: payload.checkedBy || "",
+      checkedDate: payload.checkedDate || "",
+      status: payload.status || "Pending",
+      remarks: payload.remarks || "",
+    });
+
+    await syncJobQcStage(payload.jobId);
 
     return res.status(201).json({
       success: true,
       result: created,
-      message: "QC item created",
+      message: "Qc item created",
     });
   } catch (err) {
-    return res.status(500).json({
+    return res.status(400).json({
       success: false,
       result: null,
-      message: err.message || "Failed to create QC item",
+      message: err.message,
     });
   }
 };
 
-// ✅ PATCH /api/qc/update/:id
-exports.updateQcItem = async (req, res) => {
+// PATCH /api/qc/update/:id
+exports.update = async (req, res) => {
   try {
-    const { id } = req.params;
+    const existing = await Qc.findById(req.params.id);
 
-    // optional validation if these three exist
-    const hasAll =
-      req.body.checked !== undefined &&
-      req.body.passed !== undefined &&
-      req.body.rejected !== undefined;
-
-    if (hasAll) {
-      if (Number(req.body.checked) !== Number(req.body.passed) + Number(req.body.rejected)) {
-        return res.status(400).json({
-          success: false,
-          result: null,
-          message: "passed + rejected must equal checked",
-        });
-      }
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        result: null,
+        message: "Qc item not found",
+      });
     }
 
-    const updated = await Qc.findByIdAndUpdate(id, req.body, {
+    const updated = await Qc.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
     });
 
-    return res.json({
+    await syncJobQcStage(updated.jobId);
+
+    return res.status(200).json({
       success: true,
       result: updated,
-      message: "QC item updated",
+      message: "Qc item updated",
     });
   } catch (err) {
-    return res.status(500).json({
+    return res.status(400).json({
       success: false,
       result: null,
-      message: err.message || "Failed to update QC item",
+      message: err.message,
     });
   }
 };
 
-// ✅ DELETE /api/qc/delete/:id
-exports.deleteQcItem = async (req, res) => {
+// DELETE /api/qc/delete/:id
+exports.delete = async (req, res) => {
   try {
-    const { id } = req.params;
+    const deleted = await Qc.findByIdAndDelete(req.params.id);
 
-    const deleted = await Qc.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        result: null,
+        message: "Qc item not found",
+      });
+    }
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       result: deleted,
-      message: "QC item deleted",
+      message: "Qc item deleted",
     });
   } catch (err) {
     return res.status(500).json({
       success: false,
       result: null,
-      message: err.message || "Failed to delete QC item",
+      message: err.message,
     });
   }
 };

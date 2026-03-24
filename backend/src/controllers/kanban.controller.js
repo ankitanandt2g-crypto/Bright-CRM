@@ -1,50 +1,83 @@
-const KanbanTask = require("../models/appModels/KanbanTask");
+const mongoose = require("mongoose");
 
-// GET /api/kanban/list/:jobId
+const KanbanTask = mongoose.models.KanbanTask;
+const Job = mongoose.models.Job;
+
+if (!KanbanTask) throw new Error("KanbanTask model not loaded");
+if (!Job) throw new Error("Job model not loaded");
+
 exports.listByJob = async (req, res) => {
   try {
     const { jobId } = req.params;
 
-    const tasks = await KanbanTask.find({ jobId }).sort({ createdAt: -1 });
+    if (!jobId) {
+      return res.status(400).json({
+        success: false,
+        result: [],
+        message: "jobId is required",
+      });
+    }
 
-    return res.json({
+    const result = await KanbanTask.find({ jobId }).sort({ createdAt: -1 });
+
+    return res.status(200).json({
       success: true,
-      result: tasks,
-      message: tasks.length ? "Tasks fetched" : "No tasks found",
+      result,
+      message: "Kanban tasks fetched",
     });
   } catch (err) {
     return res.status(500).json({
       success: false,
-      result: null,
+      result: [],
       message: err.message,
     });
   }
 };
 
-// POST /api/kanban/create
 exports.create = async (req, res) => {
   try {
-    const { jobId, title, description, status } = req.body;
+    const payload = req.body;
 
-    if (!jobId || !title) {
+    if (!payload.jobId) {
       return res.status(400).json({
         success: false,
         result: null,
-        message: "jobId and title are required",
+        message: "jobId is required",
+      });
+    }
+
+    if (!payload.title) {
+      return res.status(400).json({
+        success: false,
+        result: null,
+        message: "title is required",
+      });
+    }
+
+    const job = await Job.findById(payload.jobId);
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        result: null,
+        message: "Job not found",
       });
     }
 
     const created = await KanbanTask.create({
-      jobId,
-      title,
-      description: description || "",
-      status: status || "Backlog",
+      jobId: payload.jobId,
+      title: payload.title,
+      description: payload.description || "",
+      plannedStart: payload.plannedStart || "",
+      plannedEnd: payload.plannedEnd || "",
+      priority: payload.priority || "Medium",
+      assignedTeam: payload.assignedTeam || "",
+      status: payload.status || "To Schedule",
     });
 
     return res.status(201).json({
       success: true,
       result: created,
-      message: "Task created",
+      message: "Kanban task created",
     });
   } catch (err) {
     return res.status(400).json({
@@ -55,19 +88,25 @@ exports.create = async (req, res) => {
   }
 };
 
-// PATCH /api/kanban/update/:id
 exports.update = async (req, res) => {
   try {
-    const updated = await KanbanTask.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+    const updated = await KanbanTask.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
 
-    return res.json({
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        result: null,
+        message: "Kanban task not found",
+      });
+    }
+
+    return res.status(200).json({
       success: true,
       result: updated,
-      message: "Task updated",
+      message: "Kanban task updated",
     });
   } catch (err) {
     return res.status(400).json({
@@ -78,18 +117,25 @@ exports.update = async (req, res) => {
   }
 };
 
-// DELETE /api/kanban/delete/:id
-exports.remove = async (req, res) => {
+exports.delete = async (req, res) => {
   try {
-    await KanbanTask.findByIdAndDelete(req.params.id);
+    const deleted = await KanbanTask.findByIdAndDelete(req.params.id);
 
-    return res.json({
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        result: null,
+        message: "Kanban task not found",
+      });
+    }
+
+    return res.status(200).json({
       success: true,
-      result: null,
-      message: "Task deleted",
+      result: deleted,
+      message: "Kanban task deleted",
     });
   } catch (err) {
-    return res.status(400).json({
+    return res.status(500).json({
       success: false,
       result: null,
       message: err.message,

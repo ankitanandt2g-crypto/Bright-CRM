@@ -1,4 +1,3 @@
-// frontend/src/pages/Jobs/index.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Table, Button, Space, Popconfirm, message, Select, Tag } from "antd";
 import JobForm from "./JobForm";
@@ -9,37 +8,40 @@ import { useJob } from "../../context/JobContext";
 const { Option } = Select;
 
 const STAGES = [
-  "Backlog (Contract Stage)",
+  "Backlog",
   "Site Measurement",
   "Planning Lock",
   "Drafting",
+  "Job Scheduling",
+  "Material Purchase",
   "Fabrication",
   "Quality Control",
   "Installation",
   "Closure",
 ];
 
-const STATUSES = ["Backlog", "Active", "On Hold", "Closed"];
+const STATUSES = ["Backlog", "Active", "On Hold", "Completed"];
 
 const STAGE_COLORS = {
-  "Backlog (Contract Stage)": "default",
+  Backlog: "default",
   "Site Measurement": "blue",
   "Planning Lock": "purple",
-  "Drafting": "orange",
-  "Fabrication": "cyan",
+  Drafting: "orange",
+  "Job Scheduling": "gold",
+  "Material Purchase": "lime",
+  Fabrication: "cyan",
   "Quality Control": "magenta",
-  "Installation": "green",
-  "Closure": "volcano",
+  Installation: "green",
+  Closure: "volcano",
 };
 
 const STATUS_COLORS = {
   Backlog: "default",
   Active: "green",
   "On Hold": "orange",
-  Closed: "red",
+  Completed: "red",
 };
 
-// ✅ generate jobId for manual create (Job schema requires it)
 const genJobId = () => {
   const d = new Date();
   const y = d.getFullYear();
@@ -52,6 +54,7 @@ const genJobId = () => {
 export default function Jobs() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const [open, setOpen] = useState(false);
   const [editData, setEditData] = useState(null);
 
@@ -61,13 +64,34 @@ export default function Jobs() {
   const { setActiveJobId } = useJob();
   const navigate = useNavigate();
 
+  const getStageIndex = (stage) => STAGES.indexOf(stage);
+
+  const hasReachedStage = (record, stageName) => {
+    const currentIndex = getStageIndex(record?.stage);
+    const targetIndex = getStageIndex(stageName);
+
+    if (currentIndex === -1 || targetIndex === -1) return false;
+    return currentIndex >= targetIndex;
+  };
+
+  const isDraftingComplete = (record) => {
+    return (
+      record?.draftingCompleted === true ||
+      record?.ifcApproved === true ||
+      record?.ifcStatus === "Approved" ||
+      hasReachedStage(record, "Job Scheduling")
+    );
+  };
+
   const fetchJobs = async () => {
     setLoading(true);
     try {
       const data = await getJobs();
       setJobs(Array.isArray(data) ? data : []);
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Failed to fetch jobs");
+      message.error(
+        err?.response?.data?.message || err?.message || "Failed to fetch jobs"
+      );
     } finally {
       setLoading(false);
     }
@@ -79,13 +103,12 @@ export default function Jobs() {
 
   const handleSubmit = async (values) => {
     try {
-      // ✅ Job schema requires jobId
       const payload = {
         ...values,
         jobId: values.jobId || genJobId(),
         customer: values.customer || "",
         site: values.site || "",
-        stage: values.stage || "Backlog (Contract Stage)",
+        stage: values.stage || "Backlog",
         status: values.status || "Backlog",
       };
 
@@ -95,7 +118,9 @@ export default function Jobs() {
       setEditData(null);
       await fetchJobs();
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Failed to create job");
+      message.error(
+        err?.response?.data?.message || err?.message || "Failed to create job"
+      );
     }
   };
 
@@ -105,7 +130,9 @@ export default function Jobs() {
       message.success("Job deleted");
       await fetchJobs();
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Delete failed");
+      message.error(
+        err?.response?.data?.message || err?.message || "Delete failed"
+      );
     }
   };
 
@@ -114,25 +141,58 @@ export default function Jobs() {
       await updateJob(id, payload);
       await fetchJobs();
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Update failed");
+      message.error(
+        err?.response?.data?.message || err?.message || "Update failed"
+      );
     }
   };
 
-  const openJob = (job, route = "/kanban-board") => {
-    const jobId = job?._id;
+  const setJobContext = (job) => {
+    const jobObjectId = job?._id;
 
-    if (!jobId) {
+    if (!jobObjectId) {
       message.error("Job id missing");
-      return;
+      return false;
     }
 
-    setActiveJobId(jobId);
-    localStorage.setItem("activeJobId", jobId);
-
-    localStorage.setItem(`activeJobData_${jobId}`, JSON.stringify(job));
+    setActiveJobId(jobObjectId);
+    localStorage.setItem("activeJobId", jobObjectId);
+    localStorage.setItem(`activeJobData_${jobObjectId}`, JSON.stringify(job));
     localStorage.setItem("activeJobData", JSON.stringify(job));
+    return true;
+  };
 
+  const openJob = (job, route) => {
+    const ok = setJobContext(job);
+    if (!ok) return;
     navigate(route, { state: { job } });
+  };
+
+  const openSiteMeasurement = (job) => {
+    const ok = setJobContext(job);
+    if (!ok) return;
+
+    navigate(`/admin/site-measurement?jobId=${job._id}`, {
+      state: { job },
+    });
+  };
+
+  const openPlanning = (job) => {
+    const ok = setJobContext(job);
+    if (!ok) return;
+
+    navigate(`/admin/planning?jobId=${job._id}`, {
+      state: { job },
+    });
+  };
+
+  const openDrafting = (job) => {
+    const ok = setJobContext(job);
+    if (!ok) return;
+
+    navigate(`/admin/drafting?jobId=${job._id}`, {
+      state: { job },
+    });
   };
 
   const filteredJobs = useMemo(() => {
@@ -144,17 +204,31 @@ export default function Jobs() {
   }, [jobs, stageFilter, statusFilter]);
 
   const columns = [
-    { title: "Job ID", dataIndex: "jobId" },
-    { title: "Customer", dataIndex: "customer", render: (v) => v || "-" },
-    { title: "Site", dataIndex: "site", render: (v) => v || "-" },
-
+    {
+      title: "Job ID",
+      dataIndex: "jobId",
+      width: 150,
+    },
+    {
+      title: "Customer",
+      dataIndex: "customer",
+      render: (v) => v || "-",
+      width: 180,
+    },
+    {
+      title: "Site",
+      dataIndex: "site",
+      render: (v) => v || "-",
+      width: 220,
+    },
     {
       title: "Stage",
       dataIndex: "stage",
+      width: 220,
       render: (_, record) => (
         <Select
           value={record.stage}
-          style={{ width: 220 }}
+          style={{ width: 210 }}
           onChange={(v) => handleJobChange(record._id, { stage: v })}
         >
           {STAGES.map((s) => (
@@ -165,14 +239,14 @@ export default function Jobs() {
         </Select>
       ),
     },
-
     {
       title: "Status",
       dataIndex: "status",
+      width: 160,
       render: (_, record) => (
         <Select
           value={record.status}
-          style={{ width: 150 }}
+          style={{ width: 145 }}
           onChange={(v) => handleJobChange(record._id, { status: v })}
         >
           {STATUSES.map((s) => (
@@ -183,49 +257,102 @@ export default function Jobs() {
         </Select>
       ),
     },
-
     {
-      title: "Linked Lead",
-      dataIndex: "leadId",
-      render: (v) => (v ? <Tag color="green">Yes</Tag> : <Tag color="red">No</Tag>),
-    },
+      title: "Modules",
+      width: 760,
+      render: (_, record) => {
+        const planningOpen = hasReachedStage(record, "Site Measurement");
+        const draftingOpen = hasReachedStage(record, "Drafting");
+        const afterDraftingOpen = isDraftingComplete(record);
 
-    {
-      title: "Actions",
-      render: (_, record) => (
-        <Space>
-          <Button size="small" onClick={() => openJob(record, "/admin/kanban")}>
-            Kanban
-          </Button>
+        return (
+          <div style={{ maxWidth: 520 }}>
+            <Space wrap size={[8, 8]}>
+              <Button size="small" onClick={() => openSiteMeasurement(record)}>
+                Site Measurement
+              </Button>
 
-          <Button size="small" onClick={() => openJob(record, "/admin/planning")}>
-            Planning
-          </Button>
+              <Button
+                size="small"
+                disabled={!planningOpen}
+                onClick={() => openPlanning(record)}
+              >
+                Planning
+              </Button>
 
-          <Button size="small" onClick={() => openJob(record, "/admin/fabrication")}>
-            Fabrication
-          </Button>
+              <Button
+                size="small"
+                disabled={!draftingOpen}
+                onClick={() => openDrafting(record)}
+              >
+                Drafting
+              </Button>
 
-          <Button size="small" onClick={() => openJob(record, "/admin/qc")}>
-            QC
-          </Button>
+              <Button
+                size="small"
+                disabled={!afterDraftingOpen}
+                onClick={() => openJob(record, "/admin/kanban")}
+              >
+                Scheduling
+              </Button>
 
-          <Popconfirm title="Delete job?" onConfirm={() => handleDelete(record._id)}>
-            <Button danger size="small">
-              Delete
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+              <Button
+                size="small"
+                disabled={!afterDraftingOpen}
+                onClick={() => openJob(record, "/admin/material-purchase")}
+              >
+                Material
+              </Button>
+
+              <Button
+                size="small"
+                disabled={!afterDraftingOpen}
+                onClick={() => openJob(record, "/admin/fabrication")}
+              >
+                Fabrication
+              </Button>
+
+              <Button
+                size="small"
+                disabled={!afterDraftingOpen}
+                onClick={() => openJob(record, "/admin/qc")}
+              >
+                QC
+              </Button>
+
+              <Popconfirm
+                title="Delete job?"
+                onConfirm={() => handleDelete(record._id)}
+              >
+                <Button danger size="small">
+                  Delete
+                </Button>
+              </Popconfirm>
+            </Space>
+          </div>
+        );
+      },
     },
   ];
 
   return (
     <div style={{ padding: 20 }}>
-      <h2>Jobs Management (Admin)</h2>
+      <h2>Jobs Management</h2>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 15, alignItems: "center" }}>
-        <Select value={stageFilter} style={{ width: 240 }} onChange={setStageFilter}>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          marginBottom: 15,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <Select
+          value={stageFilter}
+          style={{ width: 240 }}
+          onChange={setStageFilter}
+        >
           <Option value="All">All Stages</Option>
           {STAGES.map((s) => (
             <Option key={s} value={s}>
@@ -234,7 +361,11 @@ export default function Jobs() {
           ))}
         </Select>
 
-        <Select value={statusFilter} style={{ width: 170 }} onChange={setStatusFilter}>
+        <Select
+          value={statusFilter}
+          style={{ width: 170 }}
+          onChange={setStatusFilter}
+        >
           <Option value="All">All Status</Option>
           {STATUSES.map((s) => (
             <Option key={s} value={s}>
@@ -270,9 +401,15 @@ export default function Jobs() {
         rowKey="_id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        scroll={{ x: 1700 }}
       />
 
-      <JobForm open={open} onCancel={() => setOpen(false)} onSubmit={handleSubmit} initialValues={editData} />
+      <JobForm
+        open={open}
+        onCancel={() => setOpen(false)}
+        onSubmit={handleSubmit}
+        initialValues={editData}
+      />
     </div>
   );
 }

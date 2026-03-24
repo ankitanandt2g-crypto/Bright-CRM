@@ -22,6 +22,10 @@ const statusColor = (status) => {
       return "gold";
     case "Rejected":
       return "red";
+    case "Expired":
+      return "volcano";
+    case "Client Viewed":
+      return "purple";
     default:
       return "default";
   }
@@ -32,7 +36,6 @@ export default function ReadQuoteModule({ config }) {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  // ✅ Safe config so it won't crash if config missing
   const safeConfig = useMemo(
     () =>
       config || {
@@ -60,16 +63,13 @@ export default function ReadQuoteModule({ config }) {
     try {
       setApproving(true);
 
-      // ✅ Backend should: approve quote + create job + return jobId
       const res = await approveQuote(id);
 
       message.success("Quote approved. Job created.");
 
-      // if backend returns jobId
       const jobId = res?.jobId || res?.result?.jobId || res?.result?._id;
       if (jobId) setJobIdCreated(jobId);
 
-      // refresh read data
       dispatch(erp.read({ entity: safeConfig.entity, id }));
     } catch (err) {
       message.error(
@@ -92,7 +92,6 @@ export default function ReadQuoteModule({ config }) {
     <ErpLayout>
       {isSuccess && currentResult ? (
         <div style={{ padding: 12 }}>
-          {/* Header */}
           <Card
             title={
               <Space>
@@ -106,7 +105,6 @@ export default function ReadQuoteModule({ config }) {
               <Space>
                 <Button onClick={() => navigate("/admin/quotes")}>Back</Button>
 
-                {/* ✅ Approve button (PPT/SOW key requirement) */}
                 <Button
                   type="primary"
                   disabled={!canApprove}
@@ -116,23 +114,20 @@ export default function ReadQuoteModule({ config }) {
                   Approve Quote → Create Job
                 </Button>
 
-                {/* show after approve */}
                 {(jobIdCreated || currentResult?.jobId) && (
-                  <Button
-                    type="default"
-                    onClick={() => navigate("/admin/jobs")}
-                  >
+                  <Button type="default" onClick={() => navigate("/admin/jobs")}>
                     Open Jobs
                   </Button>
                 )}
               </Space>
             }
           >
-            {/* Quote summary */}
+            {/* Summary */}
             <Descriptions bordered size="small" column={2}>
               <Descriptions.Item label="Quote No">
                 {currentResult.quoteNumber || "-"}
               </Descriptions.Item>
+
               <Descriptions.Item label="Total Quote Value">
                 {currentResult.totalAmount ?? "-"}
               </Descriptions.Item>
@@ -142,47 +137,31 @@ export default function ReadQuoteModule({ config }) {
                   ? new Date(currentResult.createdAt).toLocaleString()
                   : "-"}
               </Descriptions.Item>
+
+              <Descriptions.Item label="Quote Valid Until">
+                {currentResult.validUntil
+                  ? new Date(currentResult.validUntil).toLocaleDateString()
+                  : "-"}
+              </Descriptions.Item>
+
               <Descriptions.Item label="Lead ID">
-                {currentResult.leadId || "-"}
+                {typeof currentResult.leadId === "object"
+                  ? currentResult.leadId?._id || "-"
+                  : currentResult.leadId || "-"}
               </Descriptions.Item>
-            </Descriptions>
 
-            <Divider />
+              <Descriptions.Item label="Job ID">
+                {typeof currentResult.jobId === "object"
+                  ? currentResult.jobId?._id || "-"
+                  : currentResult.jobId || "-"}
+              </Descriptions.Item>
 
-            {/* ✅ Customer section (from Lead) */}
-            <Divider orientation="left">Customer (from Lead)</Divider>
-            <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="Client Name">
-                {currentResult.customerName || "-"}
+              <Descriptions.Item label="Approved At">
+                {currentResult.approvedAt
+                  ? new Date(currentResult.approvedAt).toLocaleString()
+                  : "-"}
               </Descriptions.Item>
-              <Descriptions.Item label="Contact Person">
-                {currentResult.contactPerson || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Phone">
-                {currentResult.phone || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Email">
-                {currentResult.email || "-"}
-              </Descriptions.Item>
-            </Descriptions>
 
-            <Divider />
-
-            {/* ✅ Project section */}
-            <Divider orientation="left">Project</Divider>
-            <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="Site Address" span={2}>
-                {currentResult.siteAddress || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Project Type">
-                {currentResult.projectType || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Balustrade Type">
-                {currentResult.balustradeType || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Lead Source">
-                {currentResult.leadSource || "-"}
-              </Descriptions.Item>
               <Descriptions.Item label="Status">
                 {currentResult.status || "Draft"}
               </Descriptions.Item>
@@ -190,18 +169,69 @@ export default function ReadQuoteModule({ config }) {
 
             <Divider />
 
-            {/* ✅ Scope section (PPT/SOW mandatory) */}
+            {/* Customer */}
+            <Divider orientation="left">Customer (from Lead)</Divider>
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="Client Name">
+                {currentResult.customerName || "-"}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Contact Person">
+                {currentResult.contactPerson || "-"}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Phone">
+                {currentResult.phone || "-"}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Email">
+                {currentResult.email || "-"}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider />
+
+            {/* Project */}
+            <Divider orientation="left">Project</Divider>
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="Site Address" span={2}>
+                {currentResult.siteAddress || "-"}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Project Type">
+                {currentResult.projectType || "-"}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Balustrade Type">
+                {currentResult.balustradeType || "-"}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Lead Source">
+                {currentResult.leadSource || "-"}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Current Stage">
+                Quote
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider />
+
+            {/* Scope */}
             <Divider orientation="left">Scope (Mandatory)</Divider>
             <Descriptions bordered size="small" column={1}>
               <Descriptions.Item label="Scope Definition">
                 {currentResult.scope || "-"}
               </Descriptions.Item>
+
               <Descriptions.Item label="Inclusions">
                 {currentResult.inclusions || "-"}
               </Descriptions.Item>
+
               <Descriptions.Item label="Exclusions">
                 {currentResult.exclusions || "-"}
               </Descriptions.Item>
+
               <Descriptions.Item label="Assumptions">
                 {currentResult.assumptions || "-"}
               </Descriptions.Item>
@@ -209,39 +239,27 @@ export default function ReadQuoteModule({ config }) {
 
             <Divider />
 
-            {/* ✅ Estimation section */}
-            <Divider orientation="left">Estimation</Divider>
+            {/* Quote Details */}
+            <Divider orientation="left">Quote Details</Divider>
             <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="Material Cost">
-                {currentResult.materialCost ?? "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Labor Cost">
-                {currentResult.laborCost ?? "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Installation Cost">
-                {currentResult.installCost ?? "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Total Amount">
+              <Descriptions.Item label="Quote Amount">
                 {currentResult.totalAmount ?? "-"}
               </Descriptions.Item>
-            </Descriptions>
 
-            <Divider />
+              <Descriptions.Item label="Quote Valid Until">
+                {currentResult.validUntil
+                  ? new Date(currentResult.validUntil).toLocaleDateString()
+                  : "-"}
+              </Descriptions.Item>
 
-            {/* ✅ Planning estimates */}
-            <Divider orientation="left">Planning Estimates</Divider>
-            <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="Expected Draft Hours">
-                {currentResult.expectedDraftHours ?? "-"}
+              <Descriptions.Item label="Status">
+                {currentResult.status || "Draft"}
               </Descriptions.Item>
-              <Descriptions.Item label="Expected Fabrication Hours">
-                {currentResult.expectedFabHours ?? "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Expected Installation Hours">
-                {currentResult.expectedInstallHours ?? "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Crew Size">
-                {currentResult.crewSize ?? "-"}
+
+              <Descriptions.Item label="Approved At">
+                {currentResult.approvedAt
+                  ? new Date(currentResult.approvedAt).toLocaleString()
+                  : "-"}
               </Descriptions.Item>
             </Descriptions>
           </Card>

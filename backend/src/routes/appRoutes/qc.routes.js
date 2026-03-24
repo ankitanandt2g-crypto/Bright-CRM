@@ -1,18 +1,12 @@
 const express = require("express");
 const router = express.Router();
 
-const {
-  listQcItems,
-  createQcItem,
-  updateQcItem,
-  deleteQcItem,
-} = require("@/controllers/qc.controller");
+const controller = require("../../controllers/qc.controller");
 
-router.get("/list", listQcItems);
-router.post("/create", createQcItem);
-router.patch("/update/:id", updateQcItem);
-router.delete("/delete/:id", deleteQcItem);
+router.get("/list/:jobId", controller.listByJob);
+router.get("/read/:id", controller.read);
+router.post("/create", controller.create);
+router.patch("/update/:id", controller.update);
+router.delete("/delete/:id", controller.delete);
 
-module.exports = router; // ✅ MUST be this
-
-
+module.exports = router;

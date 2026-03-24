@@ -1,16 +1,10 @@
-const router = require("express").Router();
+const express = require("express");
+const router = express.Router();
+const fabricationController = require("../../controllers/fabrication.controller");
 
-const {
-  listFabricationItems,
-  createFabricationItem,
-  updateFabricationItem,
-  deleteFabricationItem,
-} = require("@/controllers/fabricationcontroller");
-
-// ✅ /api/fabrication/...
-router.get("/list", listFabricationItems);
-router.post("/create", createFabricationItem);
-router.patch("/update/:id", updateFabricationItem);
-router.delete("/delete/:id", deleteFabricationItem);
+router.get("/list/:jobId", fabricationController.listByJob);
+router.post("/create", fabricationController.create);
+router.patch("/update/:id", fabricationController.update);
+router.delete("/delete/:id", fabricationController.remove);
 
 module.exports = router;

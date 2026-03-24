@@ -1,16 +1,12 @@
-const router = require("express").Router();
+const express = require("express");
+const router = express.Router();
 
-const {
-  listPlanningTasks,
-  createPlanningTask,
-  updatePlanningTask,
-  deletePlanningTask,
-} = require("@/controllers/planningcontroller");
+const controller = require("../../controllers/planningcontroller");
 
-// ✅ matches frontend
-router.get("/list", listPlanningTasks);
-router.post("/create", createPlanningTask);
-router.patch("/update/:id", updatePlanningTask);
-router.delete("/delete/:id", deletePlanningTask);
+router.get("/list/:jobId", controller.listByJob);
+router.get("/read/:id", controller.read);
+router.post("/create", controller.create);
+router.patch("/update/:id", controller.update);
+router.delete("/delete/:id", controller.delete);
 
 module.exports = router;

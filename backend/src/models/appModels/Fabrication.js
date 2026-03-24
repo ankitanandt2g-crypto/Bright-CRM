@@ -1,29 +1,89 @@
 const mongoose = require("mongoose");
 
-const FabricationSchema = new mongoose.Schema(
+const fabricationChecklistSchema = new mongoose.Schema(
   {
-    jobId: { type: mongoose.Schema.Types.ObjectId, ref: "Job", required: true },
+    ifcVerified: { type: Boolean, default: false },
+    materialAvailable: { type: Boolean, default: false },
+    cuttingCompleted: { type: Boolean, default: false },
+    weldingCompleted: { type: Boolean, default: false },
+    finishingCompleted: { type: Boolean, default: false },
+    dimensionChecked: { type: Boolean, default: false },
+    surfaceChecked: { type: Boolean, default: false },
+    readyForQc: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
 
-    itemName: { type: String, required: true, trim: true },
-    material: {
+const fabricationHoursSchema = new mongoose.Schema(
+  {
+    workerName: { type: String, trim: true },
+    role: { type: String, trim: true },
+    hours: { type: Number, default: 0 },
+    workDate: { type: String, trim: true },
+    notes: { type: String, trim: true },
+  },
+  { _id: false }
+);
+
+const fabricationSchema = new mongoose.Schema(
+  {
+    jobId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Job",
+      required: true,
+      index: true,
+    },
+    itemName: {
       type: String,
       required: true,
-      enum: ["Glass", "Stainless Steel", "Aluminium", "Wood", "Other"],
-      default: "Other",
+      trim: true,
     },
-    qty: { type: Number, required: true, min: 1, default: 1 },
-
-    dueDate: { type: String, default: null }, // "YYYY-MM-DD" (simple string like your frontend)
+    drawingRef: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    workstation: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    assignedTeam: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    quantity: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+    targetDate: {
+      type: String,
+      default: "",
+    },
     status: {
       type: String,
-      enum: ["Pending", "In Progress", "Blocked", "Done"],
+      enum: ["Pending", "In Progress", "Completed", "Hold", "Rework"],
       default: "Pending",
     },
-    notes: { type: String, trim: true, default: "" },
+    remarks: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    checklist: {
+      type: fabricationChecklistSchema,
+      default: () => ({}),
+    },
+    hoursLog: {
+      type: [fabricationHoursSchema],
+      default: [],
+    },
   },
   { timestamps: true }
 );
 
-// ✅ prevent OverwriteModelError
 module.exports =
-  mongoose.models.Fabrication || mongoose.model("Fabrication", FabricationSchema);
+  mongoose.models.Fabrication ||
+  mongoose.model("Fabrication", fabricationSchema);

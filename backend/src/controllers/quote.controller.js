@@ -16,12 +16,11 @@ const generateJobId = () => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
-  const rand = Math.floor(1000 + Math.random() * 9000); // 4 digit
+  const rand = Math.floor(1000 + Math.random() * 9000);
   return `J-${y}${m}${day}-${rand}`;
 };
 
 // ✅ GET /api/quote/list
-// ✅ GET /api/quote/list  (Idurar ErpPanel compatible pagination + filter)
 exports.listQuotes = async (req, res) => {
   try {
     const page = parseInt(req.query.page || req.query.current || "1", 10);
@@ -29,16 +28,12 @@ exports.listQuotes = async (req, res) => {
     const skip = (page - 1) * items;
 
     const q = (req.query.q || "").trim();
-
-    // ✅ Idurar table filter params
     const equal = (req.query.equal || "").toString().trim();
-    const filterKey = (req.query.filter || "").toString().trim(); // e.g. "quote"
+    const filterKey = (req.query.filter || "").toString().trim();
 
     let filter = {};
 
-    // ✅ 1) If Idurar sends equal/filter, apply it
     if (equal && filterKey) {
-      // since quotes don't have "name", we map to our fields
       filter = {
         $or: [
           { quoteNumber: { $regex: equal, $options: "i" } },
@@ -46,9 +41,7 @@ exports.listQuotes = async (req, res) => {
           { status: { $regex: equal, $options: "i" } },
         ],
       };
-    }
-    // ✅ 2) Else if q exists, apply q search
-    else if (q) {
+    } else if (q) {
       filter = {
         $or: [
           { quoteNumber: { $regex: q, $options: "i" } },
@@ -77,7 +70,6 @@ exports.listQuotes = async (req, res) => {
 };
 
 // ✅ GET /api/quote/search?q=...
-// AutoCompleteAsync compatible (expects result items having "name")
 exports.searchQuotes = async (req, res) => {
   try {
     const q = (req.query.q || req.query.search || "").trim();
@@ -97,15 +89,16 @@ exports.searchQuotes = async (req, res) => {
     const result = await Quote.find(filter)
       .sort({ createdAt: -1 })
       .limit(10)
-      .select("_id quoteNumber customerName status totalAmount createdAt");
+      .select("_id quoteNumber customerName status totalAmount validUntil createdAt");
 
-    // ✅ map to { _id, name } because AutoCompleteAsync uses displayLabels={["name"]}
     const formatted = result.map((x) => ({
       _id: x._id,
       name: `${x.quoteNumber || "Q"} - ${x.customerName || ""}`.trim(),
       quoteNumber: x.quoteNumber,
       customerName: x.customerName,
       status: x.status,
+      totalAmount: x.totalAmount,
+      validUntil: x.validUntil,
     }));
 
     return res.json({ success: true, result: formatted });
@@ -118,7 +111,9 @@ exports.searchQuotes = async (req, res) => {
 exports.readQuote = async (req, res) => {
   try {
     const quote = await Quote.findById(req.params.id);
-    if (!quote) return res.status(404).json({ success: false, message: "Quote not found" });
+    if (!quote) {
+      return res.status(404).json({ success: false, message: "Quote not found" });
+    }
     return res.json({ success: true, result: quote });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -146,21 +141,35 @@ exports.createQuote = async (req, res) => {
       });
     }
 
-    if (payload.totalAmount === undefined || payload.totalAmount === null) {
-      return res.status(400).json({ success: false, message: "totalAmount is required" });
+    if (
+      payload.totalAmount === undefined ||
+      payload.totalAmount === null ||
+      payload.totalAmount === ""
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "totalAmount is required",
+      });
+    }
+
+    if (!payload.validUntil) {
+      return res.status(400).json({
+        success: false,
+        message: "validUntil is required",
+      });
     }
 
     const quote = await Quote.create({
       leadId: payload.leadId,
 
-      customerName: payload.customerName || lead.clientName,
+      customerName: payload.customerName || lead.clientName || "",
       contactPerson: payload.contactPerson || lead.contactPerson || "",
-      phone: payload.phone || lead.phone,
+      phone: payload.phone || lead.phone || "",
       email: payload.email || lead.email || "",
 
-      siteAddress: payload.siteAddress || lead.siteAddress,
-      projectType: payload.projectType || lead.projectType,
-      balustradeType: payload.balustradeType || lead.balustradeType,
+      siteAddress: payload.siteAddress || lead.siteAddress || "",
+      projectType: payload.projectType || lead.projectType || "",
+      balustradeType: payload.balustradeType || lead.balustradeType || "",
       leadSource: payload.leadSource || lead.leadSource || "",
 
       scope: payload.scope,
@@ -168,22 +177,23 @@ exports.createQuote = async (req, res) => {
       exclusions: payload.exclusions,
       assumptions: payload.assumptions || "",
 
-      materialCost: Number(payload.materialCost || 0),
-      laborCost: Number(payload.laborCost || 0),
-      installCost: Number(payload.installCost || 0),
       totalAmount: Number(payload.totalAmount),
-
-      expectedDraftHours: Number(payload.expectedDraftHours || 0),
-      expectedFabHours: Number(payload.expectedFabHours || 0),
-      expectedInstallHours: Number(payload.expectedInstallHours || 0),
-      crewSize: Number(payload.crewSize || 1),
+      validUntil: new Date(payload.validUntil),
 
       status: payload.status || "Draft",
     });
 
-    await Lead.findByIdAndUpdate(payload.leadId, { status: "Quoted" }, { new: true });
+    await Lead.findByIdAndUpdate(
+      payload.leadId,
+      { status: "Quoted" },
+      { new: true }
+    );
 
-    return res.json({ success: true, result: quote, message: "Quote created" });
+    return res.json({
+      success: true,
+      result: quote,
+      message: "Quote created",
+    });
   } catch (err) {
     return res.status(400).json({ success: false, message: err.message });
   }
@@ -193,14 +203,37 @@ exports.createQuote = async (req, res) => {
 exports.updateQuote = async (req, res) => {
   try {
     const quote = await Quote.findById(req.params.id);
-    if (!quote) return res.status(404).json({ success: false, message: "Quote not found" });
-
-    if (quote.status === "Converted to Job") {
-      return res.status(400).json({ success: false, message: "Quote already converted to job" });
+    if (!quote) {
+      return res.status(404).json({ success: false, message: "Quote not found" });
     }
 
-    const updated = await Quote.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    return res.json({ success: true, result: updated, message: "Quote updated" });
+    if (quote.status === "Converted to Job") {
+      return res.status(400).json({
+        success: false,
+        message: "Quote already converted to job",
+      });
+    }
+
+    const payload = { ...req.body };
+
+    if (payload.totalAmount !== undefined) {
+      payload.totalAmount = Number(payload.totalAmount);
+    }
+
+    if (payload.validUntil) {
+      payload.validUntil = new Date(payload.validUntil);
+    }
+
+    const updated = await Quote.findByIdAndUpdate(req.params.id, payload, {
+      new: true,
+      runValidators: true,
+    });
+
+    return res.json({
+      success: true,
+      result: updated,
+      message: "Quote updated",
+    });
   } catch (err) {
     return res.status(400).json({ success: false, message: err.message });
   }
@@ -210,10 +243,15 @@ exports.updateQuote = async (req, res) => {
 exports.deleteQuote = async (req, res) => {
   try {
     const quote = await Quote.findById(req.params.id);
-    if (!quote) return res.status(404).json({ success: false, message: "Quote not found" });
+    if (!quote) {
+      return res.status(404).json({ success: false, message: "Quote not found" });
+    }
 
     if (quote.status === "Converted to Job") {
-      return res.status(400).json({ success: false, message: "Converted quote cannot be deleted" });
+      return res.status(400).json({
+        success: false,
+        message: "Converted quote cannot be deleted",
+      });
     }
 
     await Quote.findByIdAndDelete(req.params.id);
@@ -224,15 +262,15 @@ exports.deleteQuote = async (req, res) => {
 };
 
 // ✅ POST /api/quote/approve/:id
-// Approve => create/find Customer (CRM customer record) => create Job with schema fields (customer/site) => update Quote + Lead
 exports.approveQuoteAndCreateJob = async (req, res) => {
   try {
     const quoteId = req.params.id;
 
     const quote = await Quote.findById(quoteId);
-    if (!quote) return res.status(404).json({ success: false, message: "Quote not found" });
+    if (!quote) {
+      return res.status(404).json({ success: false, message: "Quote not found" });
+    }
 
-    // already converted
     if (quote.status === "Converted to Job" || quote.jobId) {
       return res.json({
         success: true,
@@ -241,11 +279,12 @@ exports.approveQuoteAndCreateJob = async (req, res) => {
       });
     }
 
-    // 1) Create / find customer record (separate collection)
     let customer = null;
 
     if (quote.email) customer = await Customer.findOne({ email: quote.email });
-    if (!customer && quote.phone) customer = await Customer.findOne({ phone: quote.phone });
+    if (!customer && quote.phone) {
+      customer = await Customer.findOne({ phone: quote.phone });
+    }
 
     if (!customer) {
       customer = await Customer.create({
@@ -257,45 +296,39 @@ exports.approveQuoteAndCreateJob = async (req, res) => {
       });
     }
 
-    // 2) Generate required jobId (unique)
     let jobCode = generateJobId();
     let exists = await Job.findOne({ jobId: jobCode });
+
     while (exists) {
       jobCode = generateJobId();
       exists = await Job.findOne({ jobId: jobCode });
     }
 
-    // 3) Create Job according to your Job schema
     const job = await Job.create({
-      jobId: jobCode, // ✅ required
-
-      // ✅ These are the correct field names in Job.js
+      jobId: jobCode,
       customer: quote.customerName || customer?.name || "",
       site: quote.siteAddress || customer?.address || "",
-
-      // ✅ keep lead reference
       leadId: quote.leadId || null,
-
-      // stage + status defaults are already in schema,
-      // but we can keep status explicitly
       status: "Backlog",
     });
 
-    // 4) Update Quote (mark converted)
     quote.status = "Converted to Job";
     quote.approvedAt = new Date();
     quote.customerId = customer._id;
-    quote.jobId = job._id; // store created job _id
+    quote.jobId = job._id;
     await quote.save();
 
-    // 5) Update Lead
-    await Lead.findByIdAndUpdate(quote.leadId, { status: "Converted" }, { new: true });
+    await Lead.findByIdAndUpdate(
+      quote.leadId,
+      { status: "Converted" },
+      { new: true }
+    );
 
     return res.json({
       success: true,
       result: {
         jobId: job._id,
-        jobCode, // ✅ jobId string
+        jobCode,
         customerId: customer._id,
         quoteId: quote._id,
       },
@@ -333,6 +366,11 @@ exports.downloadQuotePdf = async (req, res) => {
     doc.fontSize(12).text(`Quote No: ${quote.quoteNumber || "-"}`);
     doc.text(`Date: ${new Date(quote.createdAt).toLocaleDateString()}`);
     doc.text(`Status: ${quote.status || "Draft"}`);
+    doc.text(
+      `Valid Until: ${
+        quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : "-"
+      }`
+    );
     doc.moveDown(1);
 
     doc.fontSize(12).text("Client Details", { underline: true });
@@ -373,13 +411,11 @@ exports.downloadQuotePdf = async (req, res) => {
       doc.moveDown(1);
     }
 
-    doc.fontSize(12).text("Cost Summary", { underline: true });
+    doc.fontSize(12).text("Quote Summary", { underline: true });
     doc.moveDown(0.5);
-    doc.fontSize(10).text(`Material Cost: ${quote.materialCost ?? 0}`);
-    doc.text(`Labor Cost: ${quote.laborCost ?? 0}`);
-    doc.text(`Install Cost: ${quote.installCost ?? 0}`);
-    doc.moveDown(0.5);
-    doc.fontSize(12).text(`Total: ${quote.totalAmount ?? 0}`, { align: "right" });
+    doc.fontSize(12).text(`Total Quote Value: ${quote.totalAmount ?? 0}`, {
+      align: "right",
+    });
 
     doc.moveDown(2);
     doc.fontSize(9).fillColor("#777").text(

@@ -18,12 +18,16 @@ import Lead from "../pages/Lead";
 import Jobs from "../pages/Jobs";
 import Kanban from "../pages/Kanban";
 import Planning from "../pages/Planning";
+import SiteMeasurement from "../pages/sitemeasurement";
+import Drafting from "../pages/Drafting";
+import MaterialPurchase from "../pages/MaterialPurchase";
 
 // ✅ Your other pages
 import Fabrication from "../pages/Fabrication";
-import QC from "../pages/Quality";
+import QC from "../pages/QC";
 import Installation from "../pages/Installation";
 import Attendance from "../pages/Attendance";
+
 import Customer from "../pages/Customer";
 
 // ✅ Worker
@@ -72,6 +76,7 @@ import CompanyLogoSettingsModule from "../modules/SettingModule/CompanyLogoSetti
 import FinanceSettingsModule from "../modules/SettingModule/FinanceSettingsModule";
 import GeneralSettingsModule from "../modules/SettingModule/GeneralSettingsModule";
 import MoneyFormatSettingsModule from "../modules/SettingModule/MoneyFormatSettingsModule";
+import Employee from "@/pages/Employee";
 
 export default function AppRouter() {
   return (
@@ -95,13 +100,24 @@ export default function AppRouter() {
 
           <Route path="lead" element={<Lead />} />
           <Route path="jobs" element={<Jobs />} />
-          <Route path="kanban" element={<Kanban />} />
-          <Route path="planning" element={<Planning />} />
 
+          {/* ✅ Planning group */}
+          <Route path="site-measurement" element={<SiteMeasurement />} />
+          <Route path="planning" element={<Planning />} />
+          <Route path="drafting" element={<Drafting />} />
+
+          {/* ✅ Production group */}
+          <Route path="kanban" element={<Kanban />} />
+          <Route path="material-purchase" element={<MaterialPurchase />} />
           <Route path="fabrication" element={<Fabrication />} />
           <Route path="qc" element={<QC />} />
+
+          {/* ✅ Execution */}
           <Route path="installation" element={<Installation />} />
+
+          {/* ✅ Other admin pages */}
           <Route path="attendance" element={<Attendance />} />
+          <Route path="employee" element={<Employee />} />
           <Route path="customer" element={<Customer />} />
 
           <Route path="dashboard" element={<DashboardModule />} />
@@ -112,6 +128,7 @@ export default function AppRouter() {
           <Route path="quotes/create" element={<CreateQuoteModule />} />
           <Route path="quotes/read/:id" element={<ReadQuoteModule />} />
           <Route path="quotes/update/:id" element={<UpdateQuoteModule />} />
+
           {/* ✅ ALIAS */}
           <Route path="quote" element={<QuoteDataTableModule />} />
           <Route path="quote/create" element={<CreateQuoteModule />} />

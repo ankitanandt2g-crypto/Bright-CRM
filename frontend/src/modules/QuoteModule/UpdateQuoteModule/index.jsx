@@ -1,59 +1,5 @@
-{/*import NotFound from '@/components/NotFound';
-
-import { ErpLayout } from '@/layout';
-import UpdateItem from '@/modules/ErpPanelModule/UpdateItem';
-import QuoteForm from '@/modules/QuoteModule/Forms/QuoteForm';
-
-import PageLoader from '@/components/PageLoader';
-
-import { erp } from '@/redux/erp/actions';
-import useLanguage from '@/locale/useLanguage';
-import { selectReadItem } from '@/redux/erp/selectors';
-import { useLayoutEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { useParams, useNavigate } from 'react-router-dom';
-
-export default function UpdateQuoteModule({ config }) {
-  const dispatch = useDispatch();
-
-  const { id } = useParams();
-  const navigate = useNavigate();
-
-  useLayoutEffect(() => {
-    dispatch(erp.read({ entity: config.entity, id }));
-  }, [id]);
-
-  const { result: currentResult, isSuccess, isLoading = true } = useSelector(selectReadItem);
-
-  useLayoutEffect(() => {
-    if (currentResult) {
-      dispatch(erp.currentAction({ actionType: 'update', data: currentResult }));
-    }
-  }, [currentResult]);
-
-  if (isLoading) {
-    return (
-      <ErpLayout>
-        <PageLoader />
-      </ErpLayout>
-    );
-  } else
-    return (
-      <ErpLayout>
-        {isSuccess ? (
-          <UpdateItem config={config} UpdateForm={QuoteForm} />
-        ) : (
-          <NotFound entity={config.entity} />
-        )}
-      </ErpLayout>
-    );
-}
-*/}
-
-
-
 import React, { useEffect, useMemo, useState } from "react";
-import { Card, Form, message, Alert } from "antd";
+import { Card, Form, message, Alert, Button, Space } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 
@@ -83,22 +29,25 @@ export default function UpdateQuoteModule({ config }) {
   const [loadingQuote, setLoadingQuote] = useState(true);
   const [currentQuote, setCurrentQuote] = useState(null);
 
-  // ✅ Fetch quote details
   useEffect(() => {
     const fetchQuote = async () => {
       try {
         setLoadingQuote(true);
+
         const res = await axios.get(`${API}/read/${id}`, {
           headers: { ...authHeaders() },
         });
-        const quote = res.data?.result;
-        setCurrentQuote(quote || null);
+
+        const quote = res.data?.result || null;
 
         if (quote) {
-          form.setFieldsValue({
+          setCurrentQuote({
             ...quote,
-            leadId: quote.leadId,
+            leadId:
+              typeof quote.leadId === "object" ? quote.leadId?._id : quote.leadId,
           });
+        } else {
+          setCurrentQuote(null);
         }
       } catch (err) {
         message.error(
@@ -110,7 +59,7 @@ export default function UpdateQuoteModule({ config }) {
     };
 
     if (id) fetchQuote();
-  }, [id, form]);
+  }, [id]);
 
   const isLocked = currentQuote?.status === "Converted to Job";
 
@@ -122,16 +71,27 @@ export default function UpdateQuoteModule({ config }) {
       }
 
       setLoading(true);
-      const res = await axios.patch(`${API}/update/${id}`, values, {
+
+      const payload = {
+        ...values,
+        leadId:
+          typeof values.leadId === "object" ? values.leadId?._id : values.leadId,
+      };
+
+      const res = await axios.patch(`${API}/update/${id}`, payload, {
         headers: { ...authHeaders() },
       });
 
-      if (!res.data?.success) throw new Error(res.data?.message || "Update failed");
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || "Update failed");
+      }
 
       message.success(res.data?.message || "Quote updated");
-      navigate(`/admin/quote/read/${id}`); // keep singular to match 3-dot links
+      navigate(`/admin/quote/read/${id}`);
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Update failed");
+      message.error(
+        err?.response?.data?.message || err?.message || "Update failed"
+      );
     } finally {
       setLoading(false);
     }
@@ -158,14 +118,9 @@ export default function UpdateQuoteModule({ config }) {
       title={`Edit Quote (${currentQuote.quoteNumber || ""})`}
       style={{ margin: 12 }}
       extra={
-        <>
-          <a
-            onClick={() => navigate(`/admin/quote/read/${id}`)}
-            style={{ marginRight: 12 }}
-          >
-            Back
-          </a>
-        </>
+        <Space>
+          <Button onClick={() => navigate(`/admin/quote/read/${id}`)}>Back</Button>
+        </Space>
       }
     >
       {isLocked && (

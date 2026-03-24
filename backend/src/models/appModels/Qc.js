@@ -1,21 +1,53 @@
 const mongoose = require("mongoose");
 
-const QcSchema = new mongoose.Schema(
+const QC_STATUS = ["Pending", "Pass", "Fail", "Rework"];
+
+const QCSchema = new mongoose.Schema(
   {
-    jobId: { type: mongoose.Schema.Types.ObjectId, ref: "Job", required: true },
+    jobId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Job",
+      required: true,
+      index: true,
+    },
 
-    item: { type: String, required: true },
+    itemName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-    checked: { type: Number, default: 0 },
-    passed: { type: Number, default: 0 },
-    rejected: { type: Number, default: 0 },
+    inspectionType: {
+      type: String,
+      default: "",
+      trim: true,
+    },
 
-    inspector: { type: String, default: "" },
-    inspectionDate: { type: String, default: null }, // "YYYY-MM-DD"
-    notes: { type: String, default: "" },
+    checkedBy: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    checkedDate: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    status: {
+      type: String,
+      enum: QC_STATUS,
+      default: "Pending",
+    },
+
+    remarks: {
+      type: String,
+      default: "",
+      trim: true,
+    },
   },
   { timestamps: true }
 );
 
-// ✅ avoids OverwriteModelError
-module.exports = mongoose.models.Qc || mongoose.model("Qc", QcSchema);
+module.exports = mongoose.models.Qc || mongoose.model("Qc", QCSchema);

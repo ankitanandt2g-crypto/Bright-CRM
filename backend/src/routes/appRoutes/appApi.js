@@ -3,44 +3,69 @@ const { catchErrors } = require("@/handlers/errorHandlers");
 const router = express.Router();
 
 /**
- * ✅ Normalize route exports.
- * Fixes: Router.use() requires middleware function but got Object
- *
- * Supports exports like:
- * - module.exports = router
- * - module.exports = { router }
- * - exports.router = router
- * - exports.default = router
+ * Normalize route exports
  */
 const asRouter = (mod, name) => {
   const r = mod?.default || mod?.router || mod;
 
-  // Express Router is callable function with .use
   if (!r || typeof r.use !== "function") {
     console.error(`❌ Invalid router export in ${name}. Got:`, r);
-    throw new Error(`Invalid router export in ${name}. It must export an express.Router() instance.`);
+    throw new Error(
+      `Invalid router export in ${name}. It must export an express.Router() instance.`
+    );
   }
+
   return r;
 };
 
-// ✅ Safe mounts
+// ===============================
+// CORE MODULE ROUTES
+// ===============================
+
 router.use("/auth", asRouter(require("./auth.routes"), "auth.routes"));
 router.use("/lead", asRouter(require("./lead.routes"), "lead.routes"));
 router.use("/quote", asRouter(require("./quote.routes"), "quote.routes"));
 router.use("/kanban", asRouter(require("./kanban.routes"), "kanban.routes"));
 router.use("/job", asRouter(require("./job.routes"), "job.routes"));
+
+// ===============================
+// PROJECT WORKFLOW MODULES
+// ===============================
+
 router.use("/planning", asRouter(require("./planning.routes"), "planning.routes"));
-router.use("/user", asRouter(require("./user.routes"), "user.routes"));
+
+// ✅ NEW MODULE
+router.use("/measurement", asRouter(require("./siteMeasurement.routes"), "siteMeasurement.routes"));
+router.use("/drafting", asRouter(require("./drafting.routes"), "drafting.routes"));
+router.use("/material-purchase", asRouter(require("./materialPurchase.routes"), "materialPurchase.routes"));
+
 router.use("/fabrication", asRouter(require("./fabrication.routes"), "fabrication.routes"));
 router.use("/qc", asRouter(require("./qc.routes"), "qc.routes"));
+const installationRoutes = require("./installation.routes");
+router.use("/installation", installationRoutes);
 
-// ✅ SETTINGS (ONLY ONCE)
+// ===============================
+// USERS
+// ===============================
+
+router.use("/user", asRouter(require("./user.routes"), "user.routes"));
+
+// ===============================
+// SETTINGS
+// ===============================
+
 router.use("/settings", asRouter(require("./settings.routes"), "settings.routes"));
 
-// ✅ CUSTOMER
+// ===============================
+// CUSTOMER
+// ===============================
+
 router.use("/customer", asRouter(require("./customer.routes"), "customer.routes"));
 
-// ✅ Dynamic entities (existing system)
+// ===============================
+// DYNAMIC ERP ENTITIES
+// ===============================
+
 const appControllers = require("@/controllers/appControllers");
 const { routesList } = require("@/models/utils");
 

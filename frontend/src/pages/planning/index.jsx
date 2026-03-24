@@ -13,6 +13,11 @@ import {
   Popconfirm,
   message,
   Empty,
+  Card,
+  Descriptions,
+  Spin,
+  Row,
+  Col,
 } from "antd";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useJob } from "../../context/JobContext";
@@ -22,88 +27,213 @@ import {
   updatePlanningTask,
   deletePlanningTask,
 } from "./planningApi";
+import { getJobs, updateJob } from "../Jobs/jobApi";
 
 const { Option } = Select;
+
+const STAGE_COLORS = {
+  Backlog: "default",
+  "Site Measurement": "blue",
+  "Planning Lock": "purple",
+  Drafting: "orange",
+  "Job Scheduling": "gold",
+  "Material Purchase": "lime",
+  Fabrication: "cyan",
+  "Quality Control": "magenta",
+  Installation: "green",
+  Closure: "volcano",
+};
+
+const STATUS_COLORS = {
+  Backlog: "default",
+  Active: "green",
+  "On Hold": "orange",
+  Completed: "red",
+};
 
 export default function Planning() {
   const navigate = useNavigate();
   const location = useLocation();
-
   const { activeJobId, setActiveJobId } = useJob();
 
-  // ✅ safe job id (context OR localStorage)
-  const jobId = activeJobId || localStorage.getItem("activeJobId");
-  const jobKey = jobId ? `activeJobData_${jobId}` : null;
-
-  // ✅ show job info on header (customer/site/stage/status)
+  const [jobs, setJobs] = useState([]);
   const [jobData, setJobData] = useState(null);
 
   const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
 
-  // ✅ guard + restore job + load job header data (dynamic)
-  useEffect(() => {
-    if (!jobId) {
-      message.warning("Please open a Job first");
-      navigate("/jobs");
-      return;
-    }
+  const queryJobId = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("jobId");
+  }, [location.search]);
 
-    // restore context from localStorage
-    if (!activeJobId && jobId) {
-      setActiveJobId(jobId);
-    }
+  const jobId = queryJobId || activeJobId || localStorage.getItem("activeJobId");
+  const jobKey = jobId ? `activeJobData_${jobId}` : null;
 
-    // clear old job header when job changes
-    setJobData(null);
+  // ✅ only planning-eligible jobs
+  const eligibleJobs = useMemo(() => {
+    return jobs.filter(
+      (job) =>
+        job.stage === "Site Measurement" || job.stage === "Planning Lock"
+    );
+  }, [jobs]);
 
-    // job info from route state OR job-specific localStorage
-    const incomingJob = location.state?.job || location.state?.fromJob;
-
-    if (incomingJob) {
-      setJobData(incomingJob);
-      if (jobKey) localStorage.setItem(jobKey, JSON.stringify(incomingJob));
-      // optional backward compat
-      localStorage.setItem("activeJobData", JSON.stringify(incomingJob));
-    } else {
-      const saved = jobKey ? localStorage.getItem(jobKey) : null;
-      if (saved) setJobData(JSON.parse(saved));
-      else {
-        // fallback old key (optional)
-        const old = localStorage.getItem("activeJobData");
-        if (old) {
-          try {
-            const parsed = JSON.parse(old);
-            setJobData(parsed);
-          } catch {}
-        }
-      }
-    }
-
-    fetchTasks(jobId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId, location.state]);
-
-  const fetchTasks = async (jobIdParam) => {
-    const id = jobIdParam || jobId;
-    if (!id) return;
-
-    setLoading(true);
+  const fetchJobs = async () => {
     try {
-      const tasks = await getPlanningTasks(id);
-      setData(Array.isArray(tasks) ? tasks : []);
+      setLoadingJobs(true);
+      const result = await getJobs();
+      setJobs(Array.isArray(result) ? result : []);
     } catch (err) {
-      message.error("Failed to fetch tasks");
-      setData([]); // show empty if error
+      message.error(
+        err?.response?.data?.message || err?.message || "Failed to load jobs"
+      );
+      setJobs([]);
     } finally {
-      setLoading(false);
+      setLoadingJobs(false);
     }
   };
 
+  const setCurrentJobContext = (job) => {
+    if (!job?._id) return;
+
+    setActiveJobId(job._id);
+    localStorage.setItem("activeJobId", job._id);
+    localStorage.setItem(`activeJobData_${job._id}`, JSON.stringify(job));
+    localStorage.setItem("activeJobData", JSON.stringify(job));
+    setJobData(job);
+  };
+
+  const resolveJobData = async (resolvedJobId) => {
+    if (!resolvedJobId) {
+      setJobData(null);
+      return null;
+    }
+
+    const incomingJob = location.state?.job || location.state?.fromJob;
+
+    if (incomingJob && incomingJob._id === resolvedJobId) {
+      setCurrentJobContext(incomingJob);
+      return incomingJob;
+    }
+
+    const saved = jobKey ? localStorage.getItem(jobKey) : null;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed?._id === resolvedJobId) {
+          setCurrentJobContext(parsed);
+          return parsed;
+        }
+      } catch {}
+    }
+
+    const allJobs = jobs.length ? jobs : await getJobs();
+    const matched = Array.isArray(allJobs)
+      ? allJobs.find((j) => j._id === resolvedJobId)
+      : null;
+
+    if (matched) {
+      setCurrentJobContext(matched);
+      return matched;
+    }
+
+    return null;
+  };
+
+  const fetchTasks = async (resolvedJobId) => {
+    if (!resolvedJobId) {
+      setData([]);
+      return;
+    }
+
+    setLoadingTasks(true);
+    try {
+      const tasks = await getPlanningTasks(resolvedJobId);
+      setData(Array.isArray(tasks) ? tasks : []);
+    } catch (err) {
+      message.error(
+        err?.response?.data?.message || err?.message || "Failed to fetch planning tasks"
+      );
+      setData([]);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchJobs();
+  }, []);
+
+  useEffect(() => {
+    const init = async () => {
+      if (!jobId) {
+        setJobData(null);
+        setData([]);
+        return;
+      }
+
+      const job = await resolveJobData(jobId);
+
+      if (!job) {
+        message.warning("Please select a job first");
+        return;
+      }
+
+      // ✅ block non-eligible jobs from opening in planning
+      if (
+        job.stage !== "Site Measurement" &&
+        job.stage !== "Planning Lock"
+      ) {
+        message.warning(
+          "This job is not eligible for Planning. Complete Site Measurement first."
+        );
+        setJobData(null);
+        setData([]);
+        navigate("/admin/planning");
+        return;
+      }
+
+      await fetchTasks(jobId);
+    };
+
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId, location.state, jobs.length]);
+
+  const onJobChange = async (selectedJobId) => {
+    if (!selectedJobId) {
+      setJobData(null);
+      setData([]);
+      localStorage.removeItem("activeJobId");
+      navigate("/admin/planning");
+      return;
+    }
+
+    const selectedJob = eligibleJobs.find((j) => j._id === selectedJobId);
+
+    if (!selectedJob) {
+      message.warning("Only site measurement completed jobs are allowed in Planning");
+      return;
+    }
+
+    setCurrentJobContext(selectedJob);
+
+    navigate(`/admin/planning?jobId=${selectedJobId}`, {
+      state: { job: selectedJob },
+    });
+  };
+
   const onAddTask = async (values) => {
+    if (!jobId) {
+      message.warning("Please select a job first");
+      return;
+    }
+
     const start = values?.range?.[0]?.format("YYYY-MM-DD");
     const end = values?.range?.[1]?.format("YYYY-MM-DD");
 
@@ -114,7 +244,7 @@ export default function Planning() {
       end,
       workers: values.workers,
       hours: values.hours,
-      status: values.status, // ✅ no default
+      status: values.status,
     };
 
     try {
@@ -126,9 +256,20 @@ export default function Planning() {
         setData((prev) => [{ _id: `tmp_${Date.now()}`, ...payload }, ...prev]);
       }
 
-      message.success("Task added");
+      message.success("Planning task added");
+
+      if (jobData) {
+        const updatedJobData = {
+          ...jobData,
+          stage: "Planning Lock",
+          status: "Active",
+        };
+        setCurrentJobContext(updatedJobData);
+      }
     } catch (err) {
-      message.error("Task add failed");
+      message.error(
+        err?.response?.data?.message || err?.message || "Task add failed"
+      );
     }
 
     setOpen(false);
@@ -138,7 +279,6 @@ export default function Planning() {
   const updateStatus = async (taskRow, newStatus) => {
     const oldStatus = taskRow.status;
 
-    // optimistic update
     setData((prev) =>
       prev.map((t) => (t._id === taskRow._id ? { ...t, status: newStatus } : t))
     );
@@ -148,9 +288,10 @@ export default function Planning() {
         await updatePlanningTask(taskRow._id, { status: newStatus });
       }
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Status update failed");
+      message.error(
+        err?.response?.data?.message || err?.message || "Status update failed"
+      );
 
-      // revert
       setData((prev) =>
         prev.map((t) => (t._id === taskRow._id ? { ...t, status: oldStatus } : t))
       );
@@ -166,10 +307,46 @@ export default function Planning() {
       if (!String(taskRow._id).startsWith("tmp_")) {
         await deletePlanningTask(taskRow._id);
       }
-      message.success("Deleted");
+      message.success("Planning task deleted");
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Delete failed");
+      message.error(
+        err?.response?.data?.message || err?.message || "Delete failed"
+      );
       setData(old);
+    }
+  };
+
+  const completePlanning = async () => {
+    if (!jobId) {
+      message.warning("Please select a job first");
+      return;
+    }
+
+    try {
+      setCompleting(true);
+
+      await updateJob(jobId, {
+        stage: "Drafting",
+        status: "Active",
+      });
+
+      if (jobData) {
+        const updatedJobData = {
+          ...jobData,
+          stage: "Drafting",
+          status: "Active",
+        };
+        setCurrentJobContext(updatedJobData);
+      }
+
+      message.success("Planning completed. Job moved to Drafting.");
+      navigate("/admin/jobs");
+    } catch (err) {
+      message.error(
+        err?.response?.data?.message || err?.message || "Failed to complete planning"
+      );
+    } finally {
+      setCompleting(false);
     }
   };
 
@@ -183,7 +360,15 @@ export default function Planning() {
       title: "Status",
       dataIndex: "status",
       render: (status) => (
-        <Tag color={status === "Done" ? "green" : status === "In Progress" ? "blue" : "orange"}>
+        <Tag
+          color={
+            status === "Done"
+              ? "green"
+              : status === "In Progress"
+              ? "blue"
+              : "orange"
+          }
+        >
           {status || "-"}
         </Tag>
       ),
@@ -214,53 +399,138 @@ export default function Planning() {
     },
   ];
 
-  const jobLabel = useMemo(() => (jobId ? `Active Job: ${jobId}` : ""), [jobId]);
-
-  if (!jobId) return null;
-
-  const isEmpty = !loading && data.length === 0;
+  const isEmpty = !loadingTasks && data.length === 0;
 
   return (
     <div style={{ padding: 20 }}>
-      <Space style={{ width: "100%", justifyContent: "space-between" }} align="start">
+      <Space
+        style={{ width: "100%", justifyContent: "space-between", marginBottom: 16 }}
+        align="start"
+        wrap
+      >
         <div>
           <h2 style={{ margin: 0 }}>Planning (Admin)</h2>
-
-          {/* ✅ Job Summary */}
-          <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Tag color="blue">Job: {jobData?.jobId || jobData?._id || jobId}</Tag>
-            <Tag color="green">Customer: {jobData?.customer || "-"}</Tag>
-            <Tag color="purple">Site: {jobData?.site || "-"}</Tag>
-            <Tag color="geekblue">Stage: {jobData?.stage || "-"}</Tag>
-            <Tag color="volcano">Status: {jobData?.status || "-"}</Tag>
+          <div style={{ color: "#666", marginTop: 4 }}>
+            Only site measurement completed jobs are available here.
           </div>
         </div>
 
-        <Space>
+        <Space wrap>
           <Button onClick={() => navigate("/admin/jobs")}>Back to Jobs</Button>
-          <Button type="primary" onClick={() => setOpen(true)}>
+          <Button
+            type="primary"
+            onClick={() => {
+              if (!jobId) {
+                message.warning("Please select a job first");
+                return;
+              }
+              setOpen(true);
+            }}
+          >
             + Add Task
+          </Button>
+          <Button type="primary" onClick={completePlanning} loading={completing}>
+            Mark Planning Complete
           </Button>
         </Space>
       </Space>
 
-      {/* ✅ Empty state instead of default sample tasks */}
-      {isEmpty ? (
-        <div style={{ marginTop: 30 }}>
-          <Empty description="No planning tasks currently for this job." />
-        </div>
+      <Card style={{ marginBottom: 16 }}>
+        <Row gutter={[16, 16]} align="middle">
+          <Col xs={24} md={12} lg={10}>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>Search Eligible Job</div>
+            <Select
+              showSearch
+              allowClear
+              placeholder="Select eligible job"
+              style={{ width: "100%" }}
+              value={jobId || undefined}
+              onChange={onJobChange}
+              loading={loadingJobs}
+              optionFilterProp="children"
+            >
+              {eligibleJobs.map((job) => (
+                <Option key={job._id} value={job._id}>
+                  {job.jobId} - {job.customer || "No customer"}
+                </Option>
+              ))}
+            </Select>
+          </Col>
+
+          <Col xs={24} md={12} lg={8}>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>Current Selection</div>
+            <Input
+              readOnly
+              value={
+                jobData
+                  ? `${jobData.jobId || "-"} | ${jobData.customer || "-"}`
+                  : ""
+              }
+              placeholder="No eligible job selected"
+            />
+          </Col>
+
+          <Col xs={24} lg={6}>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>Planning Status</div>
+            {data.length > 0 ? (
+              <Tag color="green">Planning Tasks Available</Tag>
+            ) : (
+              <Tag color="orange">No Planning Tasks</Tag>
+            )}
+          </Col>
+        </Row>
+      </Card>
+
+      {!jobId ? (
+        <Card>
+          <Empty description="Please select an eligible job to continue." />
+        </Card>
+      ) : !jobData ? (
+        <Card>
+          <Spin />
+        </Card>
       ) : (
-        <Table
-          columns={columns}
-          dataSource={data}
-          rowKey="_id"
-          loading={loading}
-          style={{ marginTop: 20 }}
-          pagination={{ pageSize: 10 }}
-        />
+        <>
+          <Card title="Job Summary" style={{ marginBottom: 16 }}>
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="Job">
+                {jobData?.jobId || jobData?._id || jobId}
+              </Descriptions.Item>
+              <Descriptions.Item label="Customer">
+                {jobData?.customer || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Site" span={2}>
+                {jobData?.site || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Stage">
+                <Tag color={STAGE_COLORS[jobData?.stage] || "default"}>
+                  {jobData?.stage || "-"}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Status">
+                <Tag color={STATUS_COLORS[jobData?.status] || "default"}>
+                  {jobData?.status || "-"}
+                </Tag>
+              </Descriptions.Item>
+            </Descriptions>
+          </Card>
+
+          {isEmpty ? (
+            <Card>
+              <Empty description="No planning tasks currently for this job." />
+            </Card>
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={data}
+              rowKey="_id"
+              loading={loadingTasks}
+              pagination={{ pageSize: 10 }}
+            />
+          )}
+        </>
       )}
 
-      {/* Add Task Modal */}
       <Modal
         title="Add Planning Task"
         open={open}
@@ -277,7 +547,7 @@ export default function Planning() {
             label="Task"
             rules={[{ required: true, message: "Task is required" }]}
           >
-            <Input placeholder="e.g. Site Measurement" />
+            <Input placeholder="e.g. Measurement review / team allocation" />
           </Form.Item>
 
           <Form.Item
@@ -304,7 +574,6 @@ export default function Planning() {
             <InputNumber min={1} style={{ width: "100%" }} />
           </Form.Item>
 
-          {/* ✅ no default status now */}
           <Form.Item
             name="status"
             label="Status"

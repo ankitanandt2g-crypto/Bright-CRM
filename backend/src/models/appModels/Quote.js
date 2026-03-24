@@ -5,43 +5,55 @@ const QuoteSchema = new mongoose.Schema(
     quoteNumber: { type: String, unique: true, index: true },
 
     // linkages
-    leadId: { type: mongoose.Schema.Types.ObjectId, ref: "Lead", required: true },
-    customerId: { type: mongoose.Schema.Types.ObjectId, ref: "Customer", default: null },
-    jobId: { type: mongoose.Schema.Types.ObjectId, ref: "Job", default: null },
+    leadId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Lead",
+      required: true,
+    },
+    customerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Customer",
+      default: null,
+    },
+    jobId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Job",
+      default: null,
+    },
 
     // customer snapshot (from lead)
-    customerName: { type: String, required: true },
-    contactPerson: { type: String, default: "" },
-    phone: { type: String, required: true },
-    email: { type: String, default: "" },
+    customerName: { type: String, required: true, trim: true },
+    contactPerson: { type: String, default: "", trim: true },
+    phone: { type: String, required: true, trim: true },
+    email: { type: String, default: "", trim: true },
 
     // project/site
-    siteAddress: { type: String, required: true },
-    projectType: { type: String, required: true },
-    balustradeType: { type: String, required: true },
-    leadSource: { type: String, default: "" },
+    siteAddress: { type: String, required: true, trim: true },
+    projectType: { type: String, required: true, trim: true },
+    balustradeType: { type: String, required: true, trim: true },
+    leadSource: { type: String, default: "", trim: true },
 
-    // scope (PPT/SOW mandatory)
-    scope: { type: String, required: true },
-    inclusions: { type: String, required: true },
-    exclusions: { type: String, required: true },
-    assumptions: { type: String, default: "" },
+    // scope (mandatory as per workflow)
+    scope: { type: String, required: true, trim: true },
+    inclusions: { type: String, required: true, trim: true },
+    exclusions: { type: String, required: true, trim: true },
+    assumptions: { type: String, default: "", trim: true },
 
-    // estimation
-    materialCost: { type: Number, default: 0 },
-    laborCost: { type: Number, default: 0 },
-    installCost: { type: Number, default: 0 },
-    totalAmount: { type: Number, required: true },
-
-    // planning estimates
-    expectedDraftHours: { type: Number, default: 0 },
-    expectedFabHours: { type: Number, default: 0 },
-    expectedInstallHours: { type: Number, default: 0 },
-    crewSize: { type: Number, default: 1 },
+    // quote details
+    totalAmount: { type: Number, required: true, min: 0 },
+    validUntil: { type: Date, required: true },
 
     status: {
       type: String,
-      enum: ["Draft", "Sent", "Client Viewed", "Approved", "Rejected", "Expired", "Converted to Job"],
+      enum: [
+        "Draft",
+        "Sent",
+        "Client Viewed",
+        "Approved",
+        "Rejected",
+        "Expired",
+        "Converted to Job",
+      ],
       default: "Draft",
     },
 
@@ -60,7 +72,20 @@ QuoteSchema.pre("save", function (next) {
     const rand = Math.floor(1000 + Math.random() * 9000);
     this.quoteNumber = `Q-${y}${m}${d}-${rand}`;
   }
+
+  // auto set approvedAt when quote becomes approved
+  if (this.isModified("status")) {
+    if (this.status === "Approved" && !this.approvedAt) {
+      this.approvedAt = new Date();
+    }
+
+    if (this.status !== "Approved") {
+      this.approvedAt = null;
+    }
+  }
+
   next();
 });
 
-module.exports = mongoose.models.Quote || mongoose.model("Quote", QuoteSchema);
+module.exports =
+  mongoose.models.Quote || mongoose.model("Quote", QuoteSchema);
