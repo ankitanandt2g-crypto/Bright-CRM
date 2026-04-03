@@ -3,14 +3,15 @@ const cors = require("cors");
 const compression = require("compression");
 const cookieParser = require("cookie-parser");
 const path = require("path");
-
+const jobRoutes = require("./routes/mobile/jobRoutes");
 const coreAuthRouter = require("./routes/coreRoutes/coreAuth");
 const coreApiRouter = require("./routes/coreRoutes/coreApi");
 const coreDownloadRouter = require("./routes/coreRoutes/coreDownloadRouter");
 const corePublicRouter = require("./routes/coreRoutes/corePublicRouter");
-
+const checkinRoutes = require("./routes/mobile/checkinRoutes");
+const photoRoutes = require("./routes/mobile/photoRoutes");
 const adminAuth = require("./controllers/coreControllers/adminAuth");
-
+const workUpdateRoutes = require("./routes/mobile/workUpdateRoutes");
 const errorHandlers = require("./handlers/errorHandlers");
 const erpApiRouter = require("./routes/appRoutes/appApi");
 
@@ -37,7 +38,10 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
-
+app.use("/api/mobile", jobRoutes);
+app.use("/api/mobile", checkinRoutes);
+app.use("/api/mobile", photoRoutes);
+app.use("/api/mobile", workUpdateRoutes);
 // ============================
 // ✅ PUBLIC ROUTES (NO TOKEN)
 // ============================
