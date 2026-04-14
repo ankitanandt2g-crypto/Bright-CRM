@@ -15,6 +15,20 @@ export const getLeads = async () => {
   return res.data?.result || [];
 };
 
+export const getLead = async (id) => {
+  const res = await axios.get(`${API}/read/${id}`, {
+    headers: { ...authHeaders() },
+  });
+  return res.data?.result || null;
+};
+
+export const addLeadInteraction = async (id, payload) => {
+  const res = await axios.post(`${API}/${id}/interaction`, payload, {
+    headers: { ...authHeaders() },
+  });
+  return res.data;
+};
+
 export const createLead = async (payload) => {
   const res = await axios.post(`${API}/create`, payload, {
     headers: { ...authHeaders() },

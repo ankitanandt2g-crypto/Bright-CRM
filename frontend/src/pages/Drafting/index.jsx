@@ -87,7 +87,8 @@ export default function Drafting() {
   const eligibleJobs = useMemo(() => {
     return jobs.filter(
       (job) =>
-        job.stage === "Drafting" || job.stage === "Job Scheduling"
+        job?.workflowEvents?.clientApproval?.isCompleted ||
+        String(job?.stage || "").toLowerCase() === "drafting"
     );
   }, [jobs]);
 
@@ -192,7 +193,10 @@ export default function Drafting() {
         return;
       }
 
-      if (job.stage !== "Drafting" && job.stage !== "Job Scheduling") {
+      if (
+        !job?.workflowEvents?.clientApproval?.isCompleted &&
+        String(job?.stage || "").toLowerCase() !== "drafting"
+      ) {
         message.warning(
           "This job is not eligible for Drafting. Complete Planning first."
         );
@@ -327,21 +331,7 @@ export default function Drafting() {
         isIFCApproved: true,
       });
 
-      await updateJob(jobId, {
-        stage: "Job Scheduling",
-        status: "Active",
-      });
-
-      if (jobData) {
-        const updatedJobData = {
-          ...jobData,
-          stage: "Job Scheduling",
-          status: "Active",
-        };
-        setCurrentJobContext(updatedJobData);
-      }
-
-      message.success("IFC approved. Job moved to Job Scheduling.");
+      message.success("Drawing marked as IFC Approved. Fabrication can now proceed.");
       await fetchRecords(jobId);
     } catch (err) {
       message.error(
@@ -368,21 +358,37 @@ export default function Drafting() {
     try {
       setCompleting(true);
 
+      // Mark drafting lifestyle status to completed, then move to job scheduling
+      const draftingEvent = {
+        ...(jobData?.workflowEvents?.drafting || {}),
+        isCompleted: true,
+        completedAt: new Date().toISOString(),
+        completedBy: "Drafting Module",
+      };
+
       await updateJob(jobId, {
-        stage: "Job Scheduling",
+        stage: "Material Purchase",
         status: "Active",
+        workflowEvents: {
+          ...jobData?.workflowEvents,
+          drafting: draftingEvent,
+        },
       });
 
       if (jobData) {
         const updatedJobData = {
           ...jobData,
-          stage: "Job Scheduling",
+          stage: "Material Purchase",
           status: "Active",
+          workflowEvents: {
+            ...jobData.workflowEvents,
+            drafting: draftingEvent,
+          },
         };
         setCurrentJobContext(updatedJobData);
       }
 
-      message.success("Drafting completed. Job moved to Job Scheduling.");
+      message.success("Drafting completed. Job moved to Material Purchasing.");
       navigate("/admin/jobs");
     } catch (err) {
       message.error(
@@ -466,7 +472,7 @@ export default function Drafting() {
         <div>
           <h2 style={{ margin: 0 }}>Drafting</h2>
           <div style={{ color: "#666", marginTop: 4 }}>
-            Only planning-completed jobs are available here.
+            Only Planning completed jobs are available here.
           </div>
         </div>
 

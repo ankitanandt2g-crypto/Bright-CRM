@@ -1,16 +1,22 @@
 const mongoose = require("mongoose");
+const crypto = require("crypto");
+const bcrypt = require("bcrypt");
+
+const sendMail = require("@/controllers/middlewaresControllers/createAuthMiddleware/sendMail");
 
 const Quote = mongoose.models.Quote;
 const Lead = mongoose.models.Lead;
 const Job = mongoose.models.Job;
 const Customer = mongoose.models.Customer;
+const User = mongoose.models.User;
 
 if (!Quote) throw new Error("Quote model not loaded");
 if (!Lead) throw new Error("Lead model not loaded");
 if (!Job) throw new Error("Job model not loaded");
 if (!Customer) throw new Error("Customer model not loaded");
+if (!User) throw new Error("User model not loaded");
 
-// ✅ helper: generate readable unique jobId (required by Job schema)
+// helper: generate readable unique jobId
 const generateJobId = () => {
   const d = new Date();
   const y = d.getFullYear();
@@ -20,7 +26,156 @@ const generateJobId = () => {
   return `J-${y}${m}${day}-${rand}`;
 };
 
-// ✅ GET /api/quote/list
+// helper: random password
+const generateRandomPassword = (length = 10) => {
+  const chars =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$!";
+  const bytes = crypto.randomBytes(length);
+  let password = "";
+
+  for (let i = 0; i < length; i++) {
+    password += chars[bytes[i] % chars.length];
+  }
+
+  return password;
+};
+
+// helper: normalize email
+const normalizeEmail = (email = "") => String(email || "").trim().toLowerCase();
+
+// helper: choose best person/company names
+const getPreferredPersonName = ({ customer, quote }) => {
+  return (
+    quote?.contactPerson?.trim() ||
+    customer?.contactPerson?.trim() ||
+    quote?.customerName?.trim() ||
+    customer?.name?.trim() ||
+    "Customer"
+  );
+};
+
+const getPreferredCompanyName = ({ customer, quote }) => {
+  return (
+    customer?.companyName?.trim() ||
+    quote?.customerName?.trim() ||
+    customer?.name?.trim() ||
+    "Customer Company"
+  );
+};
+
+const getPreferredMobile = ({ customer, quote }) => {
+  return (
+    customer?.mobile?.trim() ||
+    customer?.phone?.trim() ||
+    quote?.phone?.trim() ||
+    "0000000000"
+  );
+};
+
+// helper: create / reuse customer portal user
+const createOrReuseCustomerPortalUser = async ({ customer, quote }) => {
+  const email = normalizeEmail(customer?.portalEmail || customer?.email);
+  if (!email) {
+    return {
+      success: false,
+      message: "Customer email is required to create portal login",
+    };
+  }
+
+  const preferredName = getPreferredPersonName({ customer, quote });
+  const preferredCompanyName = getPreferredCompanyName({ customer, quote });
+  const preferredMobile = getPreferredMobile({ customer, quote });
+
+  let existingUser = await User.findOne({
+    email,
+    role: "customer",
+  });
+
+  if (existingUser) {
+    const userUpdate = {};
+
+    if (existingUser.name !== preferredName) {
+      userUpdate.name = preferredName;
+    }
+
+    if (existingUser.companyName !== preferredCompanyName) {
+      userUpdate.companyName = preferredCompanyName;
+    }
+
+    if (!existingUser.mobile || existingUser.mobile !== preferredMobile) {
+      userUpdate.mobile = preferredMobile;
+    }
+
+    if (
+      !existingUser.customer ||
+      String(existingUser.customer) !== String(customer._id)
+    ) {
+      userUpdate.customer = customer._id;
+    }
+
+    if (Object.keys(userUpdate).length) {
+      existingUser = await User.findByIdAndUpdate(
+        existingUser._id,
+        { $set: userUpdate },
+        { new: true }
+      );
+    }
+
+    await Customer.findByIdAndUpdate(
+      customer._id,
+      {
+        $set: {
+          user: existingUser._id,
+          portalEmail: email,
+          portalInvitedAt: new Date(),
+        },
+      },
+      { new: true }
+    );
+
+    return {
+      success: true,
+      created: false,
+      user: existingUser,
+      plainPassword: null,
+    };
+  }
+
+  const plainPassword = generateRandomPassword(10);
+  const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+  const newUser = await User.create({
+    name: preferredName,
+    companyName: preferredCompanyName,
+    email,
+    mobile: preferredMobile,
+    password: hashedPassword,
+    role: "customer",
+    customer: customer._id,
+    isActive: true,
+  });
+
+  await Customer.findByIdAndUpdate(
+    customer._id,
+    {
+      $set: {
+        user: newUser._id,
+        portalEmail: email,
+        portalInvitedAt: new Date(),
+      },
+    },
+    { new: true }
+  );
+
+  return {
+    success: true,
+    created: true,
+    user: newUser,
+    plainPassword,
+  };
+};
+
+// GET /api/quote/list
 exports.listQuotes = async (req, res) => {
   try {
     const page = parseInt(req.query.page || req.query.current || "1", 10);
@@ -69,7 +224,7 @@ exports.listQuotes = async (req, res) => {
   }
 };
 
-// ✅ GET /api/quote/search?q=...
+// GET /api/quote/search?q=...
 exports.searchQuotes = async (req, res) => {
   try {
     const q = (req.query.q || req.query.search || "").trim();
@@ -107,7 +262,7 @@ exports.searchQuotes = async (req, res) => {
   }
 };
 
-// ✅ GET /api/quote/read/:id
+// GET /api/quote/read/:id
 exports.readQuote = async (req, res) => {
   try {
     const quote = await Quote.findById(req.params.id);
@@ -120,7 +275,7 @@ exports.readQuote = async (req, res) => {
   }
 };
 
-// ✅ POST /api/quote/create
+// POST /api/quote/create
 exports.createQuote = async (req, res) => {
   try {
     const payload = req.body;
@@ -180,14 +335,15 @@ exports.createQuote = async (req, res) => {
       totalAmount: Number(payload.totalAmount),
       validUntil: new Date(payload.validUntil),
 
+      valueLevel: payload.valueLevel || "Medium",
+      priority: payload.priority || 2,
+      categoryCode: payload.categoryCode || "Residential",
+      materialCode: payload.materialCode || "Aluminium",
+
       status: payload.status || "Draft",
     });
 
-    await Lead.findByIdAndUpdate(
-      payload.leadId,
-      { status: "Quoted" },
-      { new: true }
-    );
+    await Lead.findByIdAndUpdate(payload.leadId, { status: "Quoted" }, { new: true });
 
     return res.json({
       success: true,
@@ -199,7 +355,7 @@ exports.createQuote = async (req, res) => {
   }
 };
 
-// ✅ PATCH /api/quote/update/:id
+// PATCH /api/quote/update/:id
 exports.updateQuote = async (req, res) => {
   try {
     const quote = await Quote.findById(req.params.id);
@@ -207,14 +363,22 @@ exports.updateQuote = async (req, res) => {
       return res.status(404).json({ success: false, message: "Quote not found" });
     }
 
-    if (quote.status === "Converted to Job") {
+    if (quote.status === "Accepted" || quote.status === "Converted to Job") {
       return res.status(400).json({
         success: false,
-        message: "Quote already converted to job",
+        message: "Accepted/Converted quote cannot be edited",
       });
     }
 
     const payload = { ...req.body };
+
+    const currentSnapshot = quote.toObject();
+    delete currentSnapshot._id;
+    delete currentSnapshot.revisions;
+    delete currentSnapshot.version;
+
+    payload.revisions = [...(quote.revisions || []), currentSnapshot];
+    payload.version = (quote.version || 1) + 1;
 
     if (payload.totalAmount !== undefined) {
       payload.totalAmount = Number(payload.totalAmount);
@@ -239,7 +403,7 @@ exports.updateQuote = async (req, res) => {
   }
 };
 
-// ✅ DELETE /api/quote/delete/:id
+// DELETE /api/quote/delete/:id
 exports.deleteQuote = async (req, res) => {
   try {
     const quote = await Quote.findById(req.params.id);
@@ -261,68 +425,157 @@ exports.deleteQuote = async (req, res) => {
   }
 };
 
-// ✅ POST /api/quote/approve/:id
+// POST /api/quote/approve/:id
 exports.approveQuoteAndCreateJob = async (req, res) => {
   try {
     const quoteId = req.params.id;
+    const { method, acceptedBy } = req.body;
 
     const quote = await Quote.findById(quoteId);
     if (!quote) {
       return res.status(404).json({ success: false, message: "Quote not found" });
     }
 
-    if (quote.status === "Converted to Job" || quote.jobId) {
+    if (quote.status === "Accepted" || quote.status === "Converted to Job" || quote.jobId) {
       return res.json({
         success: true,
         result: { jobId: quote.jobId, customerId: quote.customerId },
-        message: "Quote already converted",
+        message: "Quote already accepted/converted",
+      });
+    }
+
+    if (!method || !acceptedBy) {
+      return res.status(400).json({
+        success: false,
+        message: "Acceptance method and user are required to accept a quote",
       });
     }
 
     let customer = null;
+    const email = normalizeEmail(quote.email);
 
-    if (quote.email) customer = await Customer.findOne({ email: quote.email });
+    if (email) {
+      customer = await Customer.findOne({ email });
+    }
     if (!customer && quote.phone) {
-      customer = await Customer.findOne({ phone: quote.phone });
+      customer = await Customer.findOne({
+        $or: [{ phone: quote.phone }, { mobile: quote.phone }],
+      });
     }
 
     if (!customer) {
       customer = await Customer.create({
-        name: quote.customerName,
-        phone: quote.phone,
-        email: quote.email,
-        address: quote.siteAddress,
-        contactPerson: quote.contactPerson,
+        name: quote.customerName || quote.contactPerson || "Customer",
+        companyName: quote.customerName || "",
+        email,
+        phone: quote.phone || "",
+        mobile: quote.phone || "",
+        address: quote.siteAddress || "",
+        contactPerson: quote.contactPerson || "",
+        leadId: quote.leadId || null,
+        status: "Active",
       });
+    } else {
+      const customerUpdate = {};
+
+      if (email && customer.email !== email) customerUpdate.email = email;
+      if (quote.phone && !customer.phone) customerUpdate.phone = quote.phone;
+      if (quote.phone && !customer.mobile) customerUpdate.mobile = quote.phone;
+      if (quote.siteAddress && !customer.address) customerUpdate.address = quote.siteAddress;
+      if (quote.contactPerson && customer.contactPerson !== quote.contactPerson) {
+        customerUpdate.contactPerson = quote.contactPerson;
+      }
+      if (quote.customerName && !customer.companyName) {
+        customerUpdate.companyName = quote.customerName;
+      }
+
+      if (Object.keys(customerUpdate).length) {
+        customer = await Customer.findByIdAndUpdate(
+          customer._id,
+          { $set: customerUpdate },
+          { new: true }
+        );
+      }
     }
 
-    let jobCode = generateJobId();
-    let exists = await Job.findOne({ jobId: jobCode });
-
-    while (exists) {
-      jobCode = generateJobId();
-      exists = await Job.findOne({ jobId: jobCode });
-    }
+    const jobCode = generateJobId();
 
     const job = await Job.create({
       jobId: jobCode,
+      customerId: customer._id,
       customer: quote.customerName || customer?.name || "",
       site: quote.siteAddress || customer?.address || "",
+      address: quote.siteAddress || customer?.address || "",
+      projectType: quote.projectType || quote.categoryCode || "",
+      lockedValue: Number(quote.totalAmount || 0),
       leadId: quote.leadId || null,
-      status: "Backlog",
+      quoteId: quote._id,
     });
 
-    quote.status = "Converted to Job";
+    quote.status = "Accepted";
     quote.approvedAt = new Date();
+    quote.acceptanceAudit = {
+      method,
+      acceptedBy,
+      acceptedAt: new Date(),
+    };
     quote.customerId = customer._id;
     quote.jobId = job._id;
     await quote.save();
 
     await Lead.findByIdAndUpdate(
       quote.leadId,
-      { status: "Converted" },
+      { status: "Converted", isLocked: true },
       { new: true }
     );
+
+    let portalUserResult = null;
+    let onboardingMailSent = false;
+
+    if (email) {
+      const companyNameForUser = getPreferredCompanyName({ customer, quote });
+      const mobileForUser = getPreferredMobile({ customer, quote });
+
+      customer = await Customer.findByIdAndUpdate(
+        customer._id,
+        {
+          $set: {
+            companyName: companyNameForUser,
+            mobile: mobileForUser,
+            portalEmail: email,
+            name: quote.customerName || customer.name || "Customer",
+            contactPerson: quote.contactPerson || customer.contactPerson || "",
+          },
+        },
+        { new: true }
+      );
+
+      portalUserResult = await createOrReuseCustomerPortalUser({ customer, quote });
+
+      if (!portalUserResult.success) {
+        return res.status(500).json({
+          success: false,
+          message: portalUserResult.message,
+        });
+      }
+
+      if (portalUserResult.created && portalUserResult.plainPassword) {
+        const loginLink =
+          process.env.CUSTOMER_PORTAL_URL || "http://localhost:3000/portal/login";
+
+        const mailRes = await sendMail({
+          email,
+          name: getPreferredPersonName({ customer, quote }),
+          link: loginLink,
+          idurar_app_email: process.env.MAIL_FROM,
+          subject: "Your Customer Portal Login Details",
+          type: "customerOnboarding",
+          password: portalUserResult.plainPassword,
+        });
+
+        onboardingMailSent = !!mailRes?.success || !!mailRes?.id || !!mailRes?.data;
+      }
+    }
 
     return res.json({
       success: true,
@@ -331,15 +584,19 @@ exports.approveQuoteAndCreateJob = async (req, res) => {
         jobCode,
         customerId: customer._id,
         quoteId: quote._id,
+        portalUserCreated: !!portalUserResult?.created,
+        onboardingMailSent,
       },
-      message: "Quote approved. Job created.",
+      message: email
+        ? "Quote approved, job created, and customer portal setup completed."
+        : "Quote approved and job created, but customer email was missing for portal setup.",
     });
   } catch (err) {
     return res.status(400).json({ success: false, message: err.message });
   }
 };
 
-// ✅ GET /api/quote/download/:id (PDF)
+// GET /api/quote/download/:id (PDF)
 exports.downloadQuotePdf = async (req, res) => {
   try {
     const PDFDocument = require("pdfkit");

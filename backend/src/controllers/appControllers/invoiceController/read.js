@@ -9,6 +9,7 @@ const read = async (req, res) => {
     removed: false,
   })
     .populate('createdBy', 'name')
+    .populate('job')
     .exec();
   // If no results found, return document not found
   if (!result) {

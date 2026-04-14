@@ -67,10 +67,32 @@ const SiteMeasurementSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    powerLocation: {
+      type: String,
+      default: "",
+      trim: true,
+    },
 
     waterAvailable: {
       type: Boolean,
       default: false,
+    },
+    waterLocation: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    liftAccess: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    washroomAccess: {
+      type: String,
+      default: "",
+      trim: true,
     },
 
     publicRisk: {

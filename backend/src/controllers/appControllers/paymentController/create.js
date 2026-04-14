@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const Model = mongoose.model('Payment');
 const Invoice = mongoose.model('Invoice');
-const custom = require('@/controllers/pdfController');
+const Job = mongoose.model('Job');
 
 const { calculate } = require('@/helpers');
 
@@ -21,13 +21,24 @@ const create = async (req, res) => {
     removed: false,
   });
 
-  const {
-    total: previousTotal,
-    discount: previousDiscount,
-    credit: previousCredit,
-  } = currentInvoice;
+  if (!currentInvoice) {
+    return res.status(400).json({
+      success: false,
+      result: null,
+      message: 'Invoice not found',
+    });
+  }
 
-  const maxAmount = calculate.sub(calculate.sub(previousTotal, previousDiscount), previousCredit);
+  // Check if invoice is issued (only issued invoices can receive payments)
+  if (currentInvoice.status === 'Draft') {
+    return res.status(400).json({
+      success: false,
+      result: null,
+      message: 'Cannot make payment on draft invoice. Invoice must be issued first.',
+    });
+  }
+
+  const maxAmount = currentInvoice.amountDue;
 
   if (req.body.amount > maxAmount) {
     return res.status(202).json({
@@ -36,7 +47,16 @@ const create = async (req, res) => {
       message: `The Max Amount you can add is ${maxAmount}`,
     });
   }
-  req.body['createdBy'] = req.admin._id;
+
+  req.body['createdBy'] = (req.admin || req.user)?._id;
+  
+  // Generate unique payment number
+  const lastPayment = await Model.findOne().sort({ number: -1 });
+  let nextNumber = 1;
+  if (lastPayment && lastPayment.number) {
+    nextNumber = lastPayment.number + 1;
+  }
+  req.body['number'] = nextNumber;
 
   const result = await Model.create(req.body);
 
@@ -51,24 +71,39 @@ const create = async (req, res) => {
       new: true,
     }
   ).exec();
-  // Returning successfull response
 
+  // Update invoice with payment
   const { _id: paymentId, amount } = result;
-  const { id: invoiceId, total, discount, credit } = currentInvoice;
+  const { _id: invoiceId, total, job } = currentInvoice;
 
-  let paymentStatus =
-    calculate.sub(total, discount) === calculate.add(credit, amount)
-      ? 'paid'
-      : calculate.add(credit, amount) > 0
-      ? 'partially'
-      : 'unpaid';
+  let newAmountPaid = currentInvoice.amountPaid + amount;
+  let newAmountDue = total - newAmountPaid;
+
+  // Determine new status
+  let newStatus = 'Partially Paid';
+  if (newAmountDue === 0) {
+    newStatus = 'Paid';
+  } else if (newAmountDue > 0 && newAmountPaid > 0) {
+    newStatus = 'Partially Paid';
+  }
+
+  // Check if overdue
+  const now = new Date();
+  const isOverdue = now > currentInvoice.expiredDate && newAmountDue > 0;
+  if (isOverdue) {
+    newStatus = 'Overdue';
+  }
 
   const invoiceUpdate = await Invoice.findOneAndUpdate(
-    { _id: req.body.invoice },
+    { _id: invoiceId },
     {
       $push: { payment: paymentId.toString() },
-      $inc: { credit: amount },
-      $set: { paymentStatus: paymentStatus },
+      $set: {
+        amountPaid: newAmountPaid,
+        amountDue: newAmountDue,
+        status: newStatus,
+        isOverdue: isOverdue
+      },
     },
     {
       new: true, // return the new result instead of the old one
@@ -76,10 +111,17 @@ const create = async (req, res) => {
     }
   ).exec();
 
+  // Update job's totalPaid and trigger state calculation
+  const updatedJob = await Job.findOne({ _id: job });
+  if (updatedJob) {
+    updatedJob.totalPaid += amount;
+    await updatedJob.save();
+  }
+
   return res.status(200).json({
     success: true,
     result: updatePath,
-    message: 'Payment Invoice created successfully',
+    message: 'Payment created successfully',
   });
 };
 

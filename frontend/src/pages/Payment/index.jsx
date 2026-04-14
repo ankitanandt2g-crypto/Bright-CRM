@@ -9,9 +9,9 @@ export default function Payment() {
   const { dateFormat } = useDate();
   const { moneyFormatter } = useMoney();
   const searchConfig = {
-    entity: 'client',
+    entity: 'payment',
     displayLabels: ['number'],
-    searchFields: 'number',
+    searchFields: 'number,ref',
     outputValue: '_id',
   };
 
@@ -19,12 +19,11 @@ export default function Payment() {
   const dataTableColumns = [
     {
       title: translate('Number'),
-
       dataIndex: 'number',
     },
     {
-      title: translate('Client'),
-      dataIndex: ['client', 'name'],
+      title: translate('Customer'),
+      dataIndex: ['invoice', 'job', 'customer'],
     },
     {
       title: translate('Amount'),
@@ -49,12 +48,8 @@ export default function Payment() {
       },
     },
     {
-      title: translate('Number'),
+      title: translate('Invoice'),
       dataIndex: ['invoice', 'number'],
-    },
-    {
-      title: translate('year'),
-      dataIndex: ['invoice', 'year'],
     },
     {
       title: translate('Payment Mode'),

@@ -15,10 +15,10 @@ const workUpdateRoutes = require("./routes/mobile/workUpdateRoutes");
 const errorHandlers = require("./handlers/errorHandlers");
 const erpApiRouter = require("./routes/appRoutes/appApi");
 
-// 👉 Your custom auth routes
+// Custom auth routes
 const authRouter = require("./routes/appRoutes/auth.routes");
 
-// 👉 Public settings route
+// Public settings route
 const settingsPublicRoutes = require("./routes/appRoutes/settings.public.routes");
 
 const app = express();
@@ -26,7 +26,6 @@ const app = express();
 // ============================
 // CORS
 // ============================
-
 app.use(
   cors({
     origin: true,
@@ -43,39 +42,56 @@ app.use("/api/mobile", checkinRoutes);
 app.use("/api/mobile", photoRoutes);
 app.use("/api/mobile", workUpdateRoutes);
 // ============================
-// ✅ PUBLIC ROUTES (NO TOKEN)
+// STATIC FILES
+// ============================
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
+// ============================
+// PUBLIC ROUTES (NO TOKEN)
 // ============================
 
 // Idurar core auth
 app.use("/api", coreAuthRouter);
 
-// Your custom auth routes
+// Custom auth routes
+// Login URL => /api/auth/login
 app.use("/api/auth", authRouter);
 
-// Public settings (logo + company name)
+// Public settings
+// Example => /api/settings/public
 app.use("/api/settings", settingsPublicRoutes);
 
 // Public downloads & public APIs
 app.use("/download", coreDownloadRouter);
 app.use("/public", corePublicRouter);
 
-// Static uploads (logo access)
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
-
 // ============================
-// 🔒 PROTECTED ROUTES (TOKEN REQUIRED)
+// PROTECTED ROUTES (TOKEN REQUIRED)
 // ============================
 
 // Core protected APIs
 app.use("/api", adminAuth.isValidAuthToken, coreApiRouter);
 
-// ERP / App APIs (lead, job, kanban, settings admin, etc.)
+// App/ERP APIs
+// IMPORTANT:
+// This works for customer portal only if isValidAuthToken validates
+// any logged-in user token (admin/worker/customer) and does NOT block
+// customer role.
 app.use("/api", adminAuth.isValidAuthToken, erpApiRouter);
+
+// ============================
+// HEALTH CHECK (OPTIONAL BUT USEFUL)
+// ============================
+app.get("/api/health", (req, res) => {
+  return res.json({
+    success: true,
+    message: "API is running",
+  });
+});
 
 // ============================
 // ERROR HANDLERS
 // ============================
-
 app.use(errorHandlers.notFound);
 app.use(errorHandlers.productionErrors);
 

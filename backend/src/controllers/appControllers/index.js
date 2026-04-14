@@ -1,5 +1,5 @@
-const createCRUDController = require('@/controllers/middlewaresControllers/createCRUDController');
-const { routesList } = require('@/models/utils');
+const createCRUDController = require('../middlewaresControllers/createCRUDController');
+const { routesList } = require('../../models/utils');
 
 const { globSync } = require('glob');
 const path = require('path');
@@ -16,13 +16,15 @@ const appControllers = () => {
   controllerDirectories.forEach((controllerName) => {
     try {
       const customController = require('@/controllers/appControllers/' + controllerName);
+      console.log(`Loading controller: ${controllerName}`);
 
       if (customController) {
         hasCustomControllers.push(controllerName);
         controllers[controllerName] = customController;
       }
     } catch (err) {
-      throw new Error(err.message);
+      console.error(`Error loading controller ${controllerName}:`, err.message);
+      throw new Error(`Error loading controller ${controllerName}: ${err.message}`);
     }
   });
 

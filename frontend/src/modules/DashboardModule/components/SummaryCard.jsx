@@ -3,9 +3,53 @@ import { useMoney } from '@/settings';
 import { selectMoneyFormat } from '@/redux/settings/selectors';
 import { useSelector } from 'react-redux';
 
-export default function AnalyticSummaryCard({ title, tagColor, data, prefix, isLoading = false }) {
+export default function AnalyticSummaryCard({
+  title,
+  tagColor,
+  data,
+  prefix,
+  isLoading = false,
+  isMoney = true,
+}) {
   const { moneyFormatter } = useMoney();
   const money_format_settings = useSelector(selectMoneyFormat);
+
+  // Helper function to safely format currency
+  const formatCurrencyValue = (value) => {
+    // If not money format, just return the value
+    if (!isMoney) {
+      return value || '—';
+    }
+
+    // Check if value is valid
+    if (value == null || (typeof value === 'number' && isNaN(value))) {
+      value = 0;
+    }
+
+    const currencyCode = money_format_settings?.default_currency_code || 'INR';
+
+    // Try to use moneyFormatter
+    try {
+      const result = moneyFormatter({
+        amount: value,
+        currency_code: currencyCode,
+      });
+      // Verify the result is valid
+      if (result && typeof result === 'string' && !result.includes('undefined') && !result.includes('NaN')) {
+        return result;
+      }
+    } catch (error) {
+      // Fall back to simple formatting
+    }
+
+    // Fallback: simple currency formatting
+    const symbol = money_format_settings?.currency_symbol || '';
+    const formatted = (value || 0).toFixed(2);
+    return money_format_settings?.currency_position === 'before'
+      ? `${symbol} ${formatted}`
+      : `${formatted} ${symbol}`;
+  };
+
   return (
     <Col
       className="gutter-row"
@@ -77,15 +121,7 @@ export default function AnalyticSummaryCard({ title, tagColor, data, prefix, isL
                       direction: 'ltr',
                     }}
                   >
-                    {data
-                      ? moneyFormatter({
-                          amount: data,
-                          currency_code: money_format_settings?.default_currency_code,
-                        })
-                      : moneyFormatter({
-                          amount: 0,
-                          currency_code: money_format_settings?.default_currency_code,
-                        })}
+                    {formatCurrencyValue(data)}
                   </Tag>
                 </Tooltip>
               )}

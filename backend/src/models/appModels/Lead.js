@@ -6,15 +6,18 @@ const LeadSchema = new mongoose.Schema(
     contactPerson: { type: String, trim: true },
     phone: { type: String, required: true, trim: true },
     email: { type: String, trim: true, lowercase: true },
-    siteAddress: { type: String, required: true, trim: true },
+    siteAddress: { type: String, required: true, trim: true }, // Job Location (Suburb/Postcode)
 
-    projectType: { type: String, required: true, trim: true },
-    balustradeType: { type: String, required: true, trim: true },
+    category: { type: String, enum: ["Residential", "Commercial"], default: "Residential" },
+
+    // Keeping these optional to avoid breaking existing data
+    projectType: { type: String, trim: true },
+    balustradeType: { type: String, trim: true },
 
     leadSource: {
       type: String,
       required: true,
-      enum: ["Manual Entry", "Website Enquiries", "Phone Calls", "Referrals"],
+      enum: ["Website", "Phone Call", "Social Media", "Google", "Manual Entry"],
       default: "Manual Entry",
     },
 
@@ -22,15 +25,30 @@ const LeadSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["New", "Contacted", "Qualified", "Converted", "Lost"],
+      enum: ["New", "Contacted", "Quoted", "Lost", "Converted"], // Converted = Locked
       default: "New",
     },
-    
+
+    // Sales Control
+    nextFollowUpDate: { type: Date },
+    assignedSalesperson: { type: String, trim: true }, // Simple string for now
+
+    // Interactions History
+    interactions: [
+      {
+        type: { type: String, enum: ["Call", "Email", "Site Visit", "Note"], default: "Note" },
+        date: { type: Date, default: Date.now },
+        notes: { type: String, required: true },
+        createdBy: { type: String }, // e.g., Salesperson name
+      },
+    ],
+
+    isLocked: { type: Boolean, default: false }, // Becomes true when Quote is Accepted/Converted
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Admin",
     },
-
   },
   { timestamps: true }
 );

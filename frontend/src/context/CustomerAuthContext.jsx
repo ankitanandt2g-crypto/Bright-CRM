@@ -4,11 +4,11 @@ const CustomerAuthContext = createContext(null);
 
 export function CustomerAuthProvider({ children }) {
   const [customer, setCustomer] = useState(null);
-  const [token, setToken] = useState(() => localStorage.getItem("customer_token") || "");
+  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
 
   useEffect(() => {
-    if (token) localStorage.setItem("customer_token", token);
-    else localStorage.removeItem("customer_token");
+    if (token) localStorage.setItem("token", token);
+    else localStorage.removeItem("token");
   }, [token]);
 
   const value = useMemo(
@@ -23,7 +23,9 @@ export function CustomerAuthProvider({ children }) {
       logout: () => {
         setToken("");
         setCustomer(null);
-        localStorage.removeItem("customer_token");
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        localStorage.removeItem("role");
       },
     }),
     [token, customer]

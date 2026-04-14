@@ -9,10 +9,31 @@ if (!User) {
   throw new Error("User model not loaded.");
 }
 
-// ================= TOKEN =================
+// ================= HELPERS =================
+const normalizeEmail = (email = "") => String(email || "").trim().toLowerCase();
+
+const isUserInactive = (user) => {
+  if (!user) return true;
+
+  if (typeof user.isActive === "boolean" && user.isActive === false) return true;
+  if (typeof user.enabled === "boolean" && user.enabled === false) return true;
+  if (typeof user.removed === "boolean" && user.removed === true) return true;
+  if (typeof user.status === "string" && user.status.toLowerCase() === "inactive") {
+    return true;
+  }
+
+  return false;
+};
+
 const signToken = (user) => {
   return jwt.sign(
-    { id: user._id, role: user.role },
+    {
+      id: user._id,
+      role: user.role,
+      email: user.email || null,
+      workerId: user.workerId || null,
+      customer: user.customer || null,
+    },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
@@ -21,18 +42,27 @@ const signToken = (user) => {
 // ================= AUTO CREATE DEFAULT ADMIN =================
 exports.ensureDefaultAdmin = async () => {
   try {
-    const exists = await User.findOne({ role: "admin", email: "admin@crm.com" });
+    const exists = await User.findOne({
+      role: "admin",
+      email: "admin@crm.com",
+    });
 
     if (!exists) {
       const hash = await bcrypt.hash("Admin@123", 10);
 
-      await User.create({
+      const payload = {
         name: "System Admin",
         email: "admin@crm.com",
         password: hash,
         role: "admin",
-        isActive: true,
-      });
+      };
+
+      if (User.schema?.paths?.isActive) payload.isActive = true;
+      if (User.schema?.paths?.enabled) payload.enabled = true;
+      if (User.schema?.paths?.removed) payload.removed = false;
+      if (User.schema?.paths?.status) payload.status = "Active";
+
+      await User.create(payload);
 
       console.log("✅ Default admin created:");
       console.log("Email: admin@crm.com");
@@ -58,12 +88,24 @@ exports.login = async (req, res) => {
     let query = {};
 
     if (role === "worker") {
-      query = { role: "worker", workerId: identifier };
+      query = {
+        role: "worker",
+        workerId: String(identifier).trim(),
+      };
     } else {
-      query = { role, email: String(identifier).toLowerCase().trim() };
+      query = {
+        role,
+        email: normalizeEmail(identifier),
+      };
     }
 
-    const user = await User.findOne(query);
+    let userQuery = User.findOne(query);
+
+    if (role === "customer" && User.schema?.paths?.customer) {
+      userQuery = userQuery.populate("customer");
+    }
+
+    const user = await userQuery;
 
     if (!user) {
       return res.status(400).json({
@@ -72,7 +114,14 @@ exports.login = async (req, res) => {
       });
     }
 
-    const valid = await bcrypt.compare(password, user.password);
+    if (isUserInactive(user)) {
+      return res.status(403).json({
+        success: false,
+        message: "User account is inactive",
+      });
+    }
+
+    const valid = await bcrypt.compare(password, user.password || "");
 
     if (!valid) {
       return res.status(400).json({
@@ -87,14 +136,19 @@ exports.login = async (req, res) => {
       success: true,
       result: {
         token,
+        role: user.role,
         user: {
           _id: user._id,
           name: user.name,
-          email: user.email,
+          email: user.email || null,
           role: user.role,
           workerId: user.workerId || null,
+          companyName: user.companyName || null,
+          mobile: user.mobile || null,
+          customer: user.customer || null,
         },
       },
+      message: "Login successful",
     });
   } catch (err) {
     return res.status(500).json({
@@ -116,7 +170,7 @@ exports.customerRegister = async (req, res) => {
       });
     }
 
-    const emailLower = String(email).toLowerCase().trim();
+    const emailLower = normalizeEmail(email);
 
     const exists = await User.findOne({
       email: emailLower,
@@ -130,32 +184,37 @@ exports.customerRegister = async (req, res) => {
       });
     }
 
-    // password hash
     const hash = await bcrypt.hash(password, 10);
 
-    const user = await User.create({
+    const payload = {
       name,
       companyName,
       email: emailLower,
       mobile,
       password: hash,
       role: "customer",
-      isActive: true,
-    });
+    };
+
+    if (User.schema?.paths?.isActive) payload.isActive = true;
+    if (User.schema?.paths?.enabled) payload.enabled = true;
+    if (User.schema?.paths?.removed) payload.removed = false;
+    if (User.schema?.paths?.status) payload.status = "Active";
+    if (User.schema?.paths?.emailVerified) payload.emailVerified = true;
+
+    const user = await User.create(payload);
 
     return res.json({
       success: true,
       result: {
         _id: user._id,
         name: user.name,
-        companyName: user.companyName,
+        companyName: user.companyName || null,
         email: user.email,
-        mobile: user.mobile,
+        mobile: user.mobile || null,
         role: user.role,
       },
       message: "Customer registered successfully",
     });
-
   } catch (err) {
     return res.status(500).json({
       success: false,
@@ -164,14 +223,22 @@ exports.customerRegister = async (req, res) => {
   }
 };
 
-
 // ================= ADMIN CREATE WORKER =================
 exports.createWorker = async (req, res) => {
   try {
     const { name, email, workerId, password } = req.body;
 
+    if (!name || !email || !workerId || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "name, email, workerId and password are required",
+      });
+    }
+
+    const emailLower = normalizeEmail(email);
+
     const exists = await User.findOne({
-      $or: [{ email }, { workerId }],
+      $or: [{ email: emailLower }, { workerId: String(workerId).trim() }],
     });
 
     if (exists) {
@@ -183,18 +250,25 @@ exports.createWorker = async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
 
-    const worker = await User.create({
+    const payload = {
       name,
-      email,
-      workerId,
+      email: emailLower,
+      workerId: String(workerId).trim(),
       password: hash,
       role: "worker",
-      isActive: true,
-    });
+    };
+
+    if (User.schema?.paths?.isActive) payload.isActive = true;
+    if (User.schema?.paths?.enabled) payload.enabled = true;
+    if (User.schema?.paths?.removed) payload.removed = false;
+    if (User.schema?.paths?.status) payload.status = "Active";
+
+    const worker = await User.create(payload);
 
     return res.json({
       success: true,
       result: worker,
+      message: "Worker created successfully",
     });
   } catch (err) {
     return res.status(500).json({
@@ -215,14 +289,20 @@ exports.ensureDefaultWorker = async () => {
     if (!exists) {
       const hash = await bcrypt.hash("Worker@123", 10);
 
-      await User.create({
+      const payload = {
         name: "Default Worker",
         email: "worker@crm.com",
         workerId: "W-1001",
         password: hash,
         role: "worker",
-        isActive: true,
-      });
+      };
+
+      if (User.schema?.paths?.isActive) payload.isActive = true;
+      if (User.schema?.paths?.enabled) payload.enabled = true;
+      if (User.schema?.paths?.removed) payload.removed = false;
+      if (User.schema?.paths?.status) payload.status = "Active";
+
+      await User.create(payload);
 
       console.log("✅ Default worker created:");
       console.log("Worker ID: W-1001");
@@ -233,34 +313,71 @@ exports.ensureDefaultWorker = async () => {
   }
 };
 
+const findUserByIdentifier = async ({ email, phone }) => {
+  if (email) {
+    const emailLower = normalizeEmail(email);
+    return await User.findOne({ email: emailLower });
+  }
+
+  if (phone) {
+    const normalizedPhone = String(phone || "").trim();
+    return await User.findOne({
+      $or: [{ mobile: normalizedPhone }, { phone: normalizedPhone }],
+    });
+  }
+
+  return null;
+};
+
+const setResetToken = async (user, payload = {}) => {
+  const { type = "link" } = payload;
+  const code = type === "otp" ? Math.floor(100000 + Math.random() * 900000).toString() : crypto.randomBytes(32).toString("hex");
+  const hash = crypto.createHash("sha256").update(code).digest("hex");
+
+  user.resetPasswordTokenHash = hash;
+  user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
+  user.resetPasswordMethod = type === "otp" ? "otp" : "link";
+
+  await user.save();
+
+  return {
+    method: user.resetPasswordMethod,
+    resetCode: type === "otp" ? code : undefined,
+    resetToken: type === "link" ? code : undefined,
+  };
+};
+
 // ================= FORGOT PASSWORD =================
 exports.forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, phone, type } = req.body;
 
-    const user = await User.findOne({ email });
+    if (!email && !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Email or phone is required",
+      });
+    }
+
+    const user = await findUserByIdentifier({ email, phone });
 
     if (!user) {
       return res.json({
         success: true,
-        message: "If email exists, reset link sent",
+        message: "If the account exists, reset instructions have been sent.",
       });
     }
 
-    const token = crypto.randomBytes(32).toString("hex");
-
-    user.resetPasswordTokenHash = crypto
-      .createHash("sha256")
-      .update(token)
-      .digest("hex");
-
-    user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
-
-    await user.save();
+    const mode = String(type || (phone ? "otp" : "link")).toLowerCase();
+    const result = await setResetToken(user, { type: mode });
 
     return res.json({
       success: true,
-      result: { resetToken: token },
+      result,
+      message:
+        mode === "otp"
+          ? "Reset code generated. Use the code to set a new password."
+          : "Reset token generated. Use the link or token to set a new password.",
     });
   } catch (err) {
     return res.status(500).json({
@@ -273,29 +390,56 @@ exports.forgotPassword = async (req, res) => {
 // ================= RESET PASSWORD =================
 exports.resetPassword = async (req, res) => {
   try {
-    const { token, newPassword } = req.body;
+    const { token, otp, email, phone, newPassword } = req.body;
 
-    const tokenHash = crypto
-      .createHash("sha256")
-      .update(token)
-      .digest("hex");
+    if (!newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New password is required",
+      });
+    }
 
-    const user = await User.findOne({
-      resetPasswordTokenHash: tokenHash,
-      resetPasswordExpires: { $gt: Date.now() },
-    });
+    let user = null;
+    let tokenHash = null;
+
+    if (token) {
+      tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      user = await User.findOne({
+        resetPasswordTokenHash: tokenHash,
+        resetPasswordExpires: { $gt: Date.now() },
+        resetPasswordMethod: "link",
+      });
+    } else if (otp && (email || phone)) {
+      const identifier = email ? { email: normalizeEmail(email) } : { phone: String(phone).trim() };
+      user = await User.findOne({
+        ...identifier,
+        resetPasswordExpires: { $gt: Date.now() },
+        resetPasswordMethod: "otp",
+      });
+      if (user) {
+        tokenHash = crypto.createHash("sha256").update(String(otp)).digest("hex");
+        if (user.resetPasswordTokenHash !== tokenHash) {
+          user = null;
+        }
+      }
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Token or OTP plus email/phone is required",
+      });
+    }
 
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: "Invalid token",
+        message: "Invalid or expired reset code",
       });
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
-
     user.resetPasswordTokenHash = undefined;
     user.resetPasswordExpires = undefined;
+    user.resetPasswordMethod = undefined;
 
     await user.save();
 

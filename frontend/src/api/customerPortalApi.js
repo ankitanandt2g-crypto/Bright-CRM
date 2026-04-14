@@ -1,36 +1,90 @@
 import axios from "axios";
 
-const BASE = "http://localhost:8888/api"; // adjust if needed
+const BASE = "http://localhost:8888/api";
+
+// ⚠️ IMPORTANT: same key use karo har jagah
+const TOKEN_KEY = "token"
+const ROLE_KEY = "role";
 
 const customerHeaders = () => {
-  const token = localStorage.getItem("customer_token");
+  const token = localStorage.getItem(TOKEN_KEY);
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-// ✅ Login
-export const customerLogin = async (payload) => {
-  // backend suggest: POST /api/customer/auth/login
-  const res = await axios.post(`${BASE}/customer/auth/login`, payload);
+const logout = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(ROLE_KEY);
+};
+
+// ================= LOGIN =================
+export const customerLogin = async ({ identifier, password }) => {
+  const res = await axios.post(`${BASE}/auth/login`, {
+    role: "customer",
+    identifier,
+    password,
+  });
+
   return res.data;
 };
 
-// ✅ Profile/Details
+// ================= PROFILE =================
 export const getCustomerMe = async () => {
-  // backend suggest: GET /api/customer/me
-  const res = await axios.get(`${BASE}/customer/me`, { headers: customerHeaders() });
-  return res.data;
+  const res = await axios.get(`${BASE}/customer/me`, {
+    headers: customerHeaders(),
+  });
+  return res.data?.result;
 };
 
-// ✅ Projects list
+// ================= PROJECTS =================
 export const getCustomerProjects = async () => {
-  // backend suggest: GET /api/customer/projects
-  const res = await axios.get(`${BASE}/customer/projects`, { headers: customerHeaders() });
+  const res = await axios.get(`${BASE}/customer/projects`, {
+    headers: customerHeaders(),
+  });
+  return res.data?.result || [];
+};
+
+// ================= PROJECT DETAILS =================
+export const getCustomerProjectById = async (projectId) => {
+  const res = await axios.get(`${BASE}/customer/projects/${projectId}`, {
+    headers: customerHeaders(),
+  });
+  return res.data?.result;
+};
+
+// ================= PAYMENTS =================
+export const getCustomerPaymentSummary = async () => {
+  const res = await axios.get(`${BASE}/customer/payments/summary`, {
+    headers: customerHeaders(),
+  });
+  return res.data?.result;
+};
+
+// ================= ENQUIRY =================
+export const submitCustomerEnquiry = async (payload) => {
+  const res = await axios.post(`${BASE}/customer/enquiry`, payload, {
+    headers: customerHeaders(),
+  });
   return res.data;
 };
 
-// ✅ Project details
-export const getCustomerProjectById = async (projectId) => {
-  // backend suggest: GET /api/customer/projects/:id
-  const res = await axios.get(`${BASE}/customer/projects/${projectId}`, { headers: customerHeaders() });
+// ================= CONTACT =================
+export const createContactRequest = async (payload) => {
+  const res = await axios.post(`${BASE}/contact/create`, payload, {
+    headers: customerHeaders(),
+  });
+  return res.data;
+};
+
+export const getCustomerContacts = async () => {
+  const res = await axios.get(`${BASE}/contact/my`, {
+    headers: customerHeaders(),
+  });
+  return res.data?.result || [];
+};
+
+export const replyContactRequest = async (id, payload) => {
+  const res = await axios.post(`${BASE}/contact/${id}/reply`, payload, {
+    headers: customerHeaders(),
+  });
   return res.data;
 };

@@ -29,8 +29,6 @@ export default function CreateQuoteModule() {
 
       // project
       siteAddress: lead?.siteAddress || "",
-      projectType: lead?.projectType || "",
-      balustradeType: lead?.balustradeType || "",
       leadSource: lead?.leadSource || "Manual Entry",
 
       // quote defaults

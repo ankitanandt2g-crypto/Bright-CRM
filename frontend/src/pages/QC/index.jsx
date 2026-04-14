@@ -85,9 +85,9 @@ export default function QC() {
   const jobKey = jobId ? `activeJobData_${jobId}` : null;
 
   const eligibleJobs = useMemo(() => {
-    return jobs.filter((job) =>
-      ["Quality Control", "Installation"].includes(job.stage)
-    );
+    return Array.isArray(jobs)
+      ? jobs.filter((job) => job?.workflowEvents?.fabrication?.isCompleted)
+      : [];
   }, [jobs]);
 
   const fetchJobs = async () => {
@@ -136,13 +136,12 @@ export default function QC() {
           setCurrentJobContext(parsed);
           return parsed;
         }
-      } catch {}
+      } catch { }
     }
 
     const allJobs = jobs.length ? jobs : await getJobs();
-    const matched = Array.isArray(allJobs)
-      ? allJobs.find((j) => j._id === resolvedJobId)
-      : null;
+    const safeJobs = Array.isArray(allJobs) ? allJobs : [];
+    const matched = safeJobs.find((j) => j._id === resolvedJobId) || null;
 
     if (matched) {
       setCurrentJobContext(matched);
@@ -191,7 +190,7 @@ export default function QC() {
         return;
       }
 
-      if (!["Quality Control", "Installation"].includes(job.stage)) {
+      if (!job?.workflowEvents?.fabrication?.isCompleted) {
         message.warning("This job is not eligible for Quality Control.");
         setJobData(null);
         setItems([]);
@@ -252,12 +251,12 @@ export default function QC() {
   const openEditModal = (record) => {
     setEditingItem(record);
     form.setFieldsValue({
-      itemName: record.itemName || "",
-      inspectionType: record.inspectionType || "",
-      checkedBy: record.checkedBy || "",
-      checkedDate: record.checkedDate ? dayjs(record.checkedDate) : null,
-      status: record.status || "Pending",
-      remarks: record.remarks || "",
+      itemName: record?.itemName || "",
+      inspectionType: record?.inspectionType || "",
+      checkedBy: record?.checkedBy || "",
+      checkedDate: record?.checkedDate ? dayjs(record.checkedDate) : null,
+      status: record?.status || "Pending",
+      remarks: record?.remarks || "",
     });
     setOpen(true);
   };
@@ -273,7 +272,9 @@ export default function QC() {
       itemName: values.itemName,
       inspectionType: values.inspectionType || "",
       checkedBy: values.checkedBy || "",
-      checkedDate: values.checkedDate ? values.checkedDate.format("YYYY-MM-DD") : "",
+      checkedDate: values.checkedDate
+        ? values.checkedDate.format("YYYY-MM-DD")
+        : "",
       status: values.status || "Pending",
       remarks: values.remarks || "",
     };
@@ -309,7 +310,9 @@ export default function QC() {
     const oldStatus = record.status;
 
     setItems((prev) =>
-      prev.map((x) => (x._id === record._id ? { ...x, status: newStatus } : x))
+      (Array.isArray(prev) ? prev : []).map((x) =>
+        x._id === record._id ? { ...x, status: newStatus } : x
+      )
     );
 
     try {
@@ -320,7 +323,9 @@ export default function QC() {
         err?.response?.data?.message || err?.message || "Status update failed"
       );
       setItems((prev) =>
-        prev.map((x) => (x._id === record._id ? { ...x, status: oldStatus } : x))
+        (Array.isArray(prev) ? prev : []).map((x) =>
+          x._id === record._id ? { ...x, status: oldStatus } : x
+        )
       );
     }
   };
@@ -358,9 +363,20 @@ export default function QC() {
     try {
       setCompleting(true);
 
+      const finishingEvent = {
+        ...(jobData?.workflowEvents?.finishing || {}),
+        isCompleted: true,
+        completedAt: new Date().toISOString(),
+        completedBy: "QC Module",
+      };
+
       await updateJob(jobId, {
         stage: "Installation",
         status: "Active",
+        workflowEvents: {
+          ...(jobData?.workflowEvents || {}),
+          finishing: finishingEvent,
+        },
       });
 
       if (jobData) {
@@ -368,13 +384,30 @@ export default function QC() {
           ...jobData,
           stage: "Installation",
           status: "Active",
+          workflowEvents: {
+            ...(jobData?.workflowEvents || {}),
+            finishing: finishingEvent,
+          },
         };
         setCurrentJobContext(updatedJobData);
       }
 
       message.success("QC completed. Job moved to Installation.");
-      navigate("/admin/jobs");
-    } catch (err) {
+      navigate(`/admin/installation?jobId=${jobId}`, {
+        state: {
+          job: {
+            ...jobData,
+            stage: "Installation",
+            status: "Active",
+            workflowEvents: {
+              ...(jobData?.workflowEvents || {}),
+              finishing: finishingEvent,
+            },
+          },
+        },
+      });
+    }
+    catch (err) {
       message.error(
         err?.response?.data?.message || err?.message || "Failed to complete QC"
       );
@@ -461,7 +494,11 @@ export default function QC() {
   return (
     <div style={{ padding: 20 }}>
       <Space
-        style={{ width: "100%", justifyContent: "space-between", marginBottom: 16 }}
+        style={{
+          width: "100%",
+          justifyContent: "space-between",
+          marginBottom: 16,
+        }}
         align="start"
         wrap
       >
@@ -486,7 +523,9 @@ export default function QC() {
       <Card style={{ marginBottom: 16 }}>
         <Row gutter={[16, 16]} align="middle">
           <Col xs={24} md={12} lg={10}>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>Search Eligible Job</div>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>
+              Search Eligible Job
+            </div>
             <Select
               showSearch
               allowClear
@@ -497,7 +536,7 @@ export default function QC() {
               loading={loadingJobs}
               optionFilterProp="children"
             >
-              {eligibleJobs.map((job) => (
+              {(eligibleJobs || []).map((job) => (
                 <Option key={job._id} value={job._id}>
                   {job.jobId} - {job.customer || "No customer"}
                 </Option>
@@ -506,7 +545,9 @@ export default function QC() {
           </Col>
 
           <Col xs={24} md={12} lg={8}>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>Current Selection</div>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>
+              Current Selection
+            </div>
             <Input
               readOnly
               value={

@@ -33,16 +33,20 @@ router.use("/job", asRouter(require("./job.routes"), "job.routes"));
 // ===============================
 
 router.use("/planning", asRouter(require("./planning.routes"), "planning.routes"));
-
-// ✅ NEW MODULE
-router.use("/measurement", asRouter(require("./siteMeasurement.routes"), "siteMeasurement.routes"));
+router.use(
+  "/measurement",
+  asRouter(require("./siteMeasurement.routes"), "siteMeasurement.routes")
+);
 router.use("/drafting", asRouter(require("./drafting.routes"), "drafting.routes"));
-router.use("/material-purchase", asRouter(require("./materialPurchase.routes"), "materialPurchase.routes"));
-
+router.use(
+  "/material-purchase",
+  asRouter(require("./materialPurchase.routes"), "materialPurchase.routes")
+);
 router.use("/fabrication", asRouter(require("./fabrication.routes"), "fabrication.routes"));
 router.use("/qc", asRouter(require("./qc.routes"), "qc.routes"));
-const installationRoutes = require("./installation.routes");
-router.use("/installation", installationRoutes);
+router.use("/installation", asRouter(require("./installation.routes"), "installation.routes"));
+router.use("/employee", asRouter(require("./employee.routes"), "employee.routes"));
+router.use("/attendance", asRouter(require("./attendance.routes"), "attendance.routes"));
 
 // ===============================
 // USERS
@@ -61,6 +65,7 @@ router.use("/settings", asRouter(require("./settings.routes"), "settings.routes"
 // ===============================
 
 router.use("/customer", asRouter(require("./customer.routes"), "customer.routes"));
+router.use("/contact", require("./contact.routes"));
 
 // ===============================
 // DYNAMIC ERP ENTITIES
@@ -82,16 +87,20 @@ const routerApp = (entity, controller) => {
 
   if (entity === "invoice" || entity === "quote" || entity === "payment") {
     router.route(`/${entity}/mail`).post(catchErrors(controller["mail"]));
+    router.route(`/${entity}/download/:id`).get(catchErrors(controller["download"]));
   }
 
-  if (entity === "quote") {
-    router.route(`/${entity}/convert/:id`).get(catchErrors(controller["convert"]));
+  if (entity === "invoice") {
+    router.route(`/${entity}/issue/:id`).patch(catchErrors(controller["issue"]));
+    router.route(`/${entity}/verify-payment/:id`).patch(catchErrors(controller["verifyPayment"]));
   }
 };
 
 routesList.forEach(({ entity, controllerName }) => {
   const controller = appControllers[controllerName];
-  routerApp(entity, controller);
+  if (controller) {
+    routerApp(entity, controller);
+  }
 });
 
 module.exports = router;

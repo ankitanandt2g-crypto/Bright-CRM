@@ -7,123 +7,85 @@ import {
   Tag,
   Modal,
   Form,
-  Input,
   Card,
   Row,
   Col,
-  Space,
   message,
   Typography,
   Divider,
   Empty,
 } from "antd";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
+import {
+  getEmployees,
+  getAttendance,
+  createAttendance,
+  updateAttendance,
+} from "./attendanceApi";
 
 const { Option } = Select;
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
-const { TextArea } = Input;
 
 export default function Attendance() {
-  // Change role to "worker" to test worker view
   const currentUserRole = "admin";
   const currentWorkerEmail = "rahul@example.com";
 
-  // ---------------- WORKERS ----------------
-  const [workers, setWorkers] = useState([
-    {
-      key: 1,
-      name: "Rahul",
-      email: "rahul@example.com",
-      phone: "9876543210",
-      designation: "Welder",
-      department: "Fabrication",
-      joiningDate: "01-01-2026",
-      employeeId: "EMP001",
-      status: "Active",
-      address: "Noida",
-    },
-    {
-      key: 2,
-      name: "Amit",
-      email: "amit@example.com",
-      phone: "9876501234",
-      designation: "Installer",
-      department: "Installation",
-      joiningDate: "05-01-2026",
-      employeeId: "EMP002",
-      status: "Active",
-      address: "Ghaziabad",
-    },
-  ]);
+  const [employees, setEmployees] = useState([]);
+  const [attendanceData, setAttendanceData] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // ---------------- ATTENDANCE ----------------
-  const [attendanceData, setAttendanceData] = useState([
-    {
-      key: 1,
-      workerName: "Rahul",
-      workerEmail: "rahul@example.com",
-      employeeId: "EMP001",
-      designation: "Welder",
-      department: "Fabrication",
-      date: "24-03-2026",
-      checkin: "09:00",
-      checkout: "18:00",
-      hours: 9,
-      status: "Full Day",
-      source: "Manual",
-    },
-    {
-      key: 2,
-      workerName: "Rahul",
-      workerEmail: "rahul@example.com",
-      employeeId: "EMP001",
-      designation: "Welder",
-      department: "Fabrication",
-      date: "23-03-2026",
-      checkin: "09:20",
-      checkout: "17:10",
-      hours: 7.83,
-      status: "Half Day",
-      source: "Manual",
-    },
-    {
-      key: 3,
-      workerName: "Amit",
-      workerEmail: "amit@example.com",
-      employeeId: "EMP002",
-      designation: "Installer",
-      department: "Installation",
-      date: "24-03-2026",
-      checkin: "08:55",
-      checkout: "18:15",
-      hours: 9.33,
-      status: "Full Day",
-      source: "Manual",
-    },
-  ]);
-
-  // ---------------- MODALS ----------------
-  const [workerModalOpen, setWorkerModalOpen] = useState(false);
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
   const [editAttendanceModalOpen, setEditAttendanceModalOpen] = useState(false);
 
-  const [workerForm] = Form.useForm();
   const [attendanceForm] = Form.useForm();
   const [editAttendanceForm] = Form.useForm();
 
   const [editingRecord, setEditingRecord] = useState(null);
 
-  // ---------------- FILTERS ----------------
-  const [selectedWorker, setSelectedWorker] = useState("all");
+  const [selectedEmployee, setSelectedEmployee] = useState("all");
   const [viewType, setViewType] = useState("daily");
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [selectedWeek, setSelectedWeek] = useState(dayjs());
   const [selectedMonth, setSelectedMonth] = useState(dayjs());
   const [customRange, setCustomRange] = useState([]);
 
-  // ---------------- HELPERS ----------------
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    await Promise.all([fetchEmployees(), fetchAttendance()]);
+  };
+
+  const fetchEmployees = async () => {
+    try {
+      const res = await getEmployees();
+      setEmployees(Array.isArray(res?.result) ? res.result : []);
+    } catch (error) {
+      setEmployees([]);
+      message.error(
+        error?.response?.data?.message || "Failed to fetch employees"
+      );
+    }
+  };
+
+  const fetchAttendance = async () => {
+    try {
+      setLoading(true);
+      const res = await getAttendance();
+      setAttendanceData(Array.isArray(res?.result) ? res.result : []);
+    } catch (error) {
+      setAttendanceData([]);
+      message.error(
+        error?.response?.data?.message || "Failed to fetch attendance"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusFromHours = (hours) => {
     if (hours >= 8) return "Full Day";
     if (hours > 0) return "Half Day";
@@ -145,16 +107,16 @@ export default function Attendance() {
   const isDateInSelectedFilter = (dateStr) => {
     const recordDate = dayjs(dateStr, "DD-MM-YYYY");
 
-    if (viewType === "daily") {
-      return recordDate.isSame(selectedDate, "day");
-    }
+    if (viewType === "daily") return recordDate.isSame(selectedDate, "day");
 
     if (viewType === "weekly") {
       const startOfWeek = selectedWeek.startOf("week");
       const endOfWeek = selectedWeek.endOf("week");
       return (
-        (recordDate.isAfter(startOfWeek, "day") || recordDate.isSame(startOfWeek, "day")) &&
-        (recordDate.isBefore(endOfWeek, "day") || recordDate.isSame(endOfWeek, "day"))
+        (recordDate.isAfter(startOfWeek, "day") ||
+          recordDate.isSame(startOfWeek, "day")) &&
+        (recordDate.isBefore(endOfWeek, "day") ||
+          recordDate.isSame(endOfWeek, "day"))
       );
     }
 
@@ -174,9 +136,9 @@ export default function Attendance() {
     return true;
   };
 
-  const activeWorkers = useMemo(
-    () => workers.filter((worker) => worker.status === "Active"),
-    [workers]
+  const activeEmployees = useMemo(
+    () => employees.filter((employee) => employee.status === "Active"),
+    [employees]
   );
 
   const filteredAttendance = useMemo(() => {
@@ -186,24 +148,27 @@ export default function Attendance() {
       result = result.filter((item) => item.workerEmail === currentWorkerEmail);
     }
 
-    if (selectedWorker !== "all" && currentUserRole === "admin") {
-      result = result.filter((item) => item.workerEmail === selectedWorker);
+    if (selectedEmployee !== "all" && currentUserRole === "admin") {
+      result = result.filter((item) => item.workerEmail === selectedEmployee);
     }
 
     result = result.filter((item) => isDateInSelectedFilter(item.date));
 
     return result.sort(
       (a, b) =>
-        dayjs(b.date, "DD-MM-YYYY").valueOf() - dayjs(a.date, "DD-MM-YYYY").valueOf()
+        dayjs(b.date, "DD-MM-YYYY").valueOf() -
+        dayjs(a.date, "DD-MM-YYYY").valueOf()
     );
   }, [
     attendanceData,
-    selectedWorker,
+    selectedEmployee,
     viewType,
     selectedDate,
     selectedWeek,
     selectedMonth,
     customRange,
+    currentUserRole,
+    currentWorkerEmail,
   ]);
 
   const summary = useMemo(() => {
@@ -225,136 +190,21 @@ export default function Attendance() {
     };
   }, [filteredAttendance]);
 
-  // ---------------- CREATE WORKER ----------------
-  const handleCreateWorker = async () => {
-    try {
-      const values = await workerForm.validateFields();
-
-      const emailExists = workers.some(
-        (worker) => worker.email.toLowerCase() === values.email.toLowerCase()
-      );
-
-      if (emailExists) {
-        message.error("Worker with this email already exists");
-        return;
-      }
-
-      const employeeIdExists = workers.some(
-        (worker) => worker.employeeId.toLowerCase() === values.employeeId.toLowerCase()
-      );
-
-      if (employeeIdExists) {
-        message.error("Employee ID already exists");
-        return;
-      }
-
-      const newWorker = {
-        key: Date.now(),
-        name: values.name,
-        email: values.email,
-        phone: values.phone,
-        designation: values.designation,
-        department: values.department,
-        joiningDate: values.joiningDate.format("DD-MM-YYYY"),
-        employeeId: values.employeeId,
-        status: values.status,
-        address: values.address || "",
-      };
-
-      setWorkers((prev) => [...prev, newWorker]);
-      workerForm.resetFields();
-      setWorkerModalOpen(false);
-      message.success("Worker created successfully");
-    } catch (error) {}
-  };
-
-  // ---------------- ADD ATTENDANCE ----------------
   const handleAddAttendance = async () => {
     try {
       const values = await attendanceForm.validateFields();
 
-      const selectedWorkerObj = workers.find((w) => w.email === values.workerEmail);
-
-      if (!selectedWorkerObj) {
-        message.error("Selected worker not found");
-        return;
-      }
-
-      if (selectedWorkerObj.status !== "Active") {
-        message.error("Inactive worker attendance cannot be added");
-        return;
-      }
-
-      const hours = calculateHours(values.checkin, values.checkout);
-
-      if (hours === null) {
-        message.error("Check-out time must be after check-in time");
-        return;
-      }
-
-      const dateStr = values.date.format("DD-MM-YYYY");
-
-      const existingIndex = attendanceData.findIndex(
-        (item) =>
-          item.workerEmail === values.workerEmail &&
-          item.date === dateStr
+      const selectedEmployeeObj = employees.find(
+        (emp) => emp.email === values.workerEmail
       );
 
-      const newRecord = {
-        key: existingIndex > -1 ? attendanceData[existingIndex].key : Date.now(),
-        workerName: selectedWorkerObj.name,
-        workerEmail: selectedWorkerObj.email,
-        employeeId: selectedWorkerObj.employeeId,
-        designation: selectedWorkerObj.designation,
-        department: selectedWorkerObj.department,
-        date: dateStr,
-        checkin: values.checkin.format("HH:mm"),
-        checkout: values.checkout.format("HH:mm"),
-        hours,
-        status: getStatusFromHours(hours),
-        source: "Manual",
-      };
-
-      if (existingIndex > -1) {
-        const updated = [...attendanceData];
-        updated[existingIndex] = newRecord;
-        setAttendanceData(updated);
-        message.success("Attendance updated for this date");
-      } else {
-        setAttendanceData((prev) => [...prev, newRecord]);
-        message.success("Attendance added successfully");
-      }
-
-      attendanceForm.resetFields();
-      setAttendanceModalOpen(false);
-    } catch (error) {}
-  };
-
-  // ---------------- EDIT ATTENDANCE ----------------
-  const openEditAttendance = (record) => {
-    setEditingRecord(record);
-    editAttendanceForm.setFieldsValue({
-      workerEmail: record.workerEmail,
-      date: dayjs(record.date, "DD-MM-YYYY"),
-      checkin: dayjs(record.checkin, "HH:mm"),
-      checkout: dayjs(record.checkout, "HH:mm"),
-    });
-    setEditAttendanceModalOpen(true);
-  };
-
-  const handleEditAttendance = async () => {
-    try {
-      const values = await editAttendanceForm.validateFields();
-
-      const selectedWorkerObj = workers.find((w) => w.email === values.workerEmail);
-
-      if (!selectedWorkerObj) {
-        message.error("Worker not found");
+      if (!selectedEmployeeObj) {
+        message.error("Selected employee not found");
         return;
       }
 
-      if (selectedWorkerObj.status !== "Active") {
-        message.error("Inactive worker attendance cannot be updated");
+      if (selectedEmployeeObj.status !== "Active") {
+        message.error("Inactive employee attendance cannot be added");
         return;
       }
 
@@ -365,13 +215,12 @@ export default function Attendance() {
         return;
       }
 
-      const updatedRecord = {
-        ...editingRecord,
-        workerName: selectedWorkerObj.name,
-        workerEmail: selectedWorkerObj.email,
-        employeeId: selectedWorkerObj.employeeId,
-        designation: selectedWorkerObj.designation,
-        department: selectedWorkerObj.department,
+      const payload = {
+        workerName: selectedEmployeeObj.name,
+        workerEmail: selectedEmployeeObj.email,
+        employeeId: selectedEmployeeObj.employeeId,
+        designation: selectedEmployeeObj.designation,
+        department: selectedEmployeeObj.department,
         date: values.date.format("DD-MM-YYYY"),
         checkin: values.checkin.format("HH:mm"),
         checkout: values.checkout.format("HH:mm"),
@@ -380,57 +229,144 @@ export default function Attendance() {
         source: "Manual",
       };
 
-      setAttendanceData((prev) =>
-        prev.map((item) => (item.key === editingRecord.key ? updatedRecord : item))
-      );
+      const res = await createAttendance(payload);
 
-      setEditAttendanceModalOpen(false);
-      setEditingRecord(null);
-      editAttendanceForm.resetFields();
-      message.success("Attendance edited successfully");
-    } catch (error) {}
+      if (res?.success) {
+        message.success(res?.message || "Attendance added successfully");
+        attendanceForm.resetFields();
+        setAttendanceModalOpen(false);
+        await fetchAttendance();
+      } else {
+        message.error(res?.message || "Failed to add attendance");
+      }
+    } catch (error) {
+      if (error?.errorFields) return;
+      message.error(
+        error?.response?.data?.message || "Failed to add attendance"
+      );
+    }
   };
 
-  // ---------------- TABLE COLUMNS ----------------
+  const openEditAttendance = (record) => {
+    setEditingRecord(record);
+
+    editAttendanceForm.setFieldsValue({
+      workerEmail: record.workerEmail,
+      date: record.date ? dayjs(record.date, "DD-MM-YYYY") : null,
+      checkin: record.checkin ? dayjs(record.checkin, "HH:mm") : null,
+      checkout: record.checkout ? dayjs(record.checkout, "HH:mm") : null,
+    });
+
+    setEditAttendanceModalOpen(true);
+  };
+
+  const handleEditAttendance = async () => {
+    try {
+      const values = await editAttendanceForm.validateFields();
+
+      const selectedEmployeeObj = employees.find(
+        (emp) => emp.email === values.workerEmail
+      );
+
+      if (!selectedEmployeeObj) {
+        message.error("Selected employee not found");
+        return;
+      }
+
+      if (selectedEmployeeObj.status !== "Active") {
+        message.error("Inactive employee attendance cannot be updated");
+        return;
+      }
+
+      const hours = calculateHours(values.checkin, values.checkout);
+
+      if (hours === null) {
+        message.error("Check-out time must be after check-in time");
+        return;
+      }
+
+      const payload = {
+        workerName: selectedEmployeeObj.name,
+        workerEmail: selectedEmployeeObj.email,
+        employeeId: selectedEmployeeObj.employeeId,
+        designation: selectedEmployeeObj.designation,
+        department: selectedEmployeeObj.department,
+        date: values.date.format("DD-MM-YYYY"),
+        checkin: values.checkin.format("HH:mm"),
+        checkout: values.checkout.format("HH:mm"),
+        hours,
+        status: getStatusFromHours(hours),
+        source: "Manual",
+      };
+
+      const res = await updateAttendance(editingRecord._id, payload);
+
+      if (res?.success) {
+        setEditAttendanceModalOpen(false);
+        setEditingRecord(null);
+        editAttendanceForm.resetFields();
+        message.success(res?.message || "Attendance updated successfully");
+        await fetchAttendance();
+      } else {
+        message.error(res?.message || "Failed to update attendance");
+      }
+    } catch (error) {
+      if (error?.errorFields) return;
+      message.error(
+        error?.response?.data?.message || "Failed to update attendance"
+      );
+    }
+  };
+
   const columns = [
     {
-      title: "Worker",
+      title: "Employee",
       dataIndex: "workerName",
+      width: 160,
     },
     {
       title: "Employee ID",
       dataIndex: "employeeId",
+      width: 130,
     },
     {
       title: "Email",
       dataIndex: "workerEmail",
+      width: 220,
     },
     {
       title: "Designation",
       dataIndex: "designation",
+      width: 150,
     },
     {
       title: "Department",
       dataIndex: "department",
+      width: 150,
     },
     {
       title: "Date",
       dataIndex: "date",
+      width: 120,
     },
     {
       title: "Check In",
       dataIndex: "checkin",
+      width: 100,
     },
     {
       title: "Check Out",
       dataIndex: "checkout",
+      width: 100,
     },
     {
       title: "Hours",
       dataIndex: "hours",
+      width: 90,
     },
     {
       title: "Status",
+      width: 110,
       render: (_, record) => (
         <Tag color={getStatusColor(record.status)}>{record.status}</Tag>
       ),
@@ -438,12 +374,15 @@ export default function Attendance() {
     {
       title: "Source",
       dataIndex: "source",
+      width: 100,
       render: (value) => <Tag color="blue">{value}</Tag>,
     },
     ...(currentUserRole === "admin"
       ? [
           {
             title: "Action",
+            width: 100,
+            fixed: "right",
             render: (_, record) => (
               <Button type="link" onClick={() => openEditAttendance(record)}>
                 Edit
@@ -459,27 +398,20 @@ export default function Attendance() {
       <Row justify="space-between" align="middle" gutter={[16, 16]}>
         <Col>
           <Title level={3} style={{ margin: 0 }}>
-            {currentUserRole === "admin"
-              ? "Worker Attendance Management"
-              : "My Attendance"}
+            {currentUserRole === "admin" ? "Attendance Management" : "My Attendance"}
           </Title>
           <Text type="secondary">
             {currentUserRole === "admin"
-              ? "Create workers, add manual attendance, edit attendance, and track records by date range"
+              ? "Add manual attendance, edit attendance, and track employee records by date range"
               : "View your attendance records"}
           </Text>
         </Col>
 
         {currentUserRole === "admin" && (
           <Col>
-            <Space wrap>
-              <Button type="primary" onClick={() => setWorkerModalOpen(true)}>
-                + Create Worker
-              </Button>
-              <Button onClick={() => setAttendanceModalOpen(true)}>
-                + Add Attendance
-              </Button>
-            </Space>
+            <Button type="primary" onClick={() => setAttendanceModalOpen(true)}>
+              + Add Attendance
+            </Button>
           </Col>
         )}
       </Row>
@@ -490,16 +422,25 @@ export default function Attendance() {
         <Row gutter={[16, 16]}>
           {currentUserRole === "admin" && (
             <Col xs={24} sm={12} md={6}>
-              <Text strong>Select Worker</Text>
+              <Text strong>Select Employee</Text>
               <Select
+                showSearch
+                optionFilterProp="children"
                 style={{ width: "100%", marginTop: 6 }}
-                value={selectedWorker}
-                onChange={setSelectedWorker}
+                value={selectedEmployee}
+                onChange={setSelectedEmployee}
+                placeholder="Select employee"
+                filterOption={(input, option) =>
+                  (option?.children ?? "")
+                    .toString()
+                    .toLowerCase()
+                    .includes(input.toLowerCase())
+                }
               >
-                <Option value="all">All Workers</Option>
-                {workers.map((worker) => (
-                  <Option key={worker.email} value={worker.email}>
-                    {worker.name} ({worker.employeeId})
+                <Option value="all">All Employees</Option>
+                {employees.map((employee) => (
+                  <Option key={employee.email} value={employee.email}>
+                    {employee.name} ({employee.employeeId})
                   </Option>
                 ))}
               </Select>
@@ -611,10 +552,12 @@ export default function Attendance() {
 
       {filteredAttendance.length ? (
         <Table
+          rowKey="_id"
+          loading={loading}
           columns={columns}
           dataSource={filteredAttendance}
           pagination={{ pageSize: 8 }}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 1500 }}
         />
       ) : (
         <Card>
@@ -622,133 +565,6 @@ export default function Attendance() {
         </Card>
       )}
 
-      {/* CREATE WORKER MODAL */}
-      <Modal
-        title="Create Worker"
-        open={workerModalOpen}
-        onOk={handleCreateWorker}
-        onCancel={() => {
-          setWorkerModalOpen(false);
-          workerForm.resetFields();
-        }}
-        okText="Create"
-      >
-        <Form
-          form={workerForm}
-          layout="vertical"
-          initialValues={{ status: "Active" }}
-        >
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item
-                label="Employee ID"
-                name="employeeId"
-                rules={[{ required: true, message: "Please enter employee ID" }]}
-              >
-                <Input placeholder="EMP001" />
-              </Form.Item>
-            </Col>
-
-            <Col span={12}>
-              <Form.Item
-                label="Worker Name"
-                name="name"
-                rules={[{ required: true, message: "Please enter worker name" }]}
-              >
-                <Input placeholder="Enter full name" />
-              </Form.Item>
-            </Col>
-
-            <Col span={12}>
-              <Form.Item
-                label="Email ID"
-                name="email"
-                rules={[
-                  { required: true, message: "Please enter email" },
-                  { type: "email", message: "Please enter valid email" },
-                ]}
-              >
-                <Input placeholder="Enter worker email" />
-              </Form.Item>
-            </Col>
-
-            <Col span={12}>
-              <Form.Item
-                label="Phone Number"
-                name="phone"
-                rules={[
-                  { required: true, message: "Please enter phone number" },
-                  {
-                    pattern: /^[0-9]{10}$/,
-                    message: "Phone number must be 10 digits",
-                  },
-                ]}
-              >
-                <Input placeholder="Enter phone number" maxLength={10} />
-              </Form.Item>
-            </Col>
-
-            <Col span={12}>
-              <Form.Item
-                label="Designation"
-                name="designation"
-                rules={[{ required: true, message: "Please enter designation" }]}
-              >
-                <Input placeholder="Welder / Installer / Supervisor" />
-              </Form.Item>
-            </Col>
-
-            <Col span={12}>
-              <Form.Item
-                label="Department"
-                name="department"
-                rules={[{ required: true, message: "Please select department" }]}
-              >
-                <Select placeholder="Select department">
-                  <Option value="Fabrication">Fabrication</Option>
-                  <Option value="Installation">Installation</Option>
-                  <Option value="Quality Control">Quality Control</Option>
-                  <Option value="Planning">Planning</Option>
-                  <Option value="Drafting">Drafting</Option>
-                  <Option value="Site Measurement">Site Measurement</Option>
-                  <Option value="Admin">Admin</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-
-            <Col span={12}>
-              <Form.Item
-                label="Joining Date"
-                name="joiningDate"
-                rules={[{ required: true, message: "Please select joining date" }]}
-              >
-                <DatePicker style={{ width: "100%" }} format="DD-MM-YYYY" />
-              </Form.Item>
-            </Col>
-
-            <Col span={12}>
-              <Form.Item
-                label="Status"
-                name="status"
-                rules={[{ required: true, message: "Please select status" }]}
-              >
-                <Select>
-                  <Option value="Active">Active</Option>
-                  <Option value="Inactive">Inactive</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-
-            <Col span={24}>
-              <Form.Item label="Address" name="address">
-                <TextArea rows={3} placeholder="Enter address (optional)" />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
-
-      {/* ADD ATTENDANCE MODAL */}
       <Modal
         title="Add Manual Attendance"
         open={attendanceModalOpen}
@@ -761,14 +577,24 @@ export default function Attendance() {
       >
         <Form form={attendanceForm} layout="vertical">
           <Form.Item
-            label="Worker"
+            label="Employee"
             name="workerEmail"
-            rules={[{ required: true, message: "Please select worker" }]}
+            rules={[{ required: true, message: "Please select employee" }]}
           >
-            <Select placeholder="Select worker">
-              {activeWorkers.map((worker) => (
-                <Option key={worker.email} value={worker.email}>
-                  {worker.name} - {worker.employeeId} - {worker.designation}
+            <Select
+              showSearch
+              optionFilterProp="children"
+              placeholder="Select employee"
+              filterOption={(input, option) =>
+                (option?.children ?? "")
+                  .toString()
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+            >
+              {activeEmployees.map((employee) => (
+                <Option key={employee.email} value={employee.email}>
+                  {employee.name} - {employee.employeeId} - {employee.designation}
                 </Option>
               ))}
             </Select>
@@ -800,7 +626,6 @@ export default function Attendance() {
         </Form>
       </Modal>
 
-      {/* EDIT ATTENDANCE MODAL */}
       <Modal
         title="Edit Attendance"
         open={editAttendanceModalOpen}
@@ -814,14 +639,24 @@ export default function Attendance() {
       >
         <Form form={editAttendanceForm} layout="vertical">
           <Form.Item
-            label="Worker"
+            label="Employee"
             name="workerEmail"
-            rules={[{ required: true, message: "Please select worker" }]}
+            rules={[{ required: true, message: "Please select employee" }]}
           >
-            <Select placeholder="Select worker">
-              {activeWorkers.map((worker) => (
-                <Option key={worker.email} value={worker.email}>
-                  {worker.name} - {worker.employeeId} - {worker.designation}
+            <Select
+              showSearch
+              optionFilterProp="children"
+              placeholder="Select employee"
+              filterOption={(input, option) =>
+                (option?.children ?? "")
+                  .toString()
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+            >
+              {activeEmployees.map((employee) => (
+                <Option key={employee.email} value={employee.email}>
+                  {employee.name} - {employee.employeeId} - {employee.designation}
                 </Option>
               ))}
             </Select>

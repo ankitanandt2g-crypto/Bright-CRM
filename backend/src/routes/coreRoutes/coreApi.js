@@ -17,6 +17,9 @@ router.route('/admin/password-update/:id').patch(catchErrors(adminController.upd
 
 //_______________________________ Admin Profile _______________________________
 
+router
+  .route('/admin/profile/password/request-otp')
+  .post(catchErrors(adminController.requestPasswordOTP));
 router.route('/admin/profile/password').patch(catchErrors(adminController.updateProfilePassword));
 router
   .route('/admin/profile/update')

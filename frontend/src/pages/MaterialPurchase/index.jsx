@@ -87,9 +87,7 @@ export default function MaterialPurchase() {
   const jobKey = jobId ? `activeJobData_${jobId}` : null;
 
   const eligibleJobs = useMemo(() => {
-    return jobs.filter((job) =>
-      ["Job Scheduling", "Material Purchase", "Fabrication"].includes(job.stage)
-    );
+    return jobs.filter((job) => job?.workflowEvents?.clientApproval?.isCompleted);
   }, [jobs]);
 
   const fetchJobs = async () => {
@@ -193,7 +191,7 @@ export default function MaterialPurchase() {
         return;
       }
 
-      if (!["Job Scheduling", "Material Purchase", "Fabrication"].includes(job.stage)) {
+      if (!job?.workflowEvents?.drafting?.isCompleted) {
         message.warning(
           "This job is not eligible for Material Purchase."
         );
@@ -308,7 +306,7 @@ export default function MaterialPurchase() {
       if (jobData) {
         const updatedJobData = {
           ...jobData,
-          stage: "Material Purchase",
+          stage: "materialPurchasing",
           status: "Active",
         };
         setCurrentJobContext(updatedJobData);
@@ -376,9 +374,20 @@ export default function MaterialPurchase() {
     try {
       setCompleting(true);
 
+      const materialPurchaseEvent = {
+        ...(jobData?.workflowEvents?.materialPurchasing || {}),
+        isCompleted: true,
+        completedAt: new Date().toISOString(),
+        completedBy: "Material Purchase Module",
+      };
+
       await updateJob(jobId, {
         stage: "Fabrication",
         status: "Active",
+        workflowEvents: {
+          ...jobData?.workflowEvents,
+          materialPurchasing: materialPurchaseEvent,
+        },
       });
 
       if (jobData) {
@@ -386,6 +395,10 @@ export default function MaterialPurchase() {
           ...jobData,
           stage: "Fabrication",
           status: "Active",
+          workflowEvents: {
+            ...jobData.workflowEvents,
+            materialPurchasing: materialPurchaseEvent,
+          },
         };
         setCurrentJobContext(updatedJobData);
       }
@@ -519,7 +532,7 @@ export default function MaterialPurchase() {
         <div>
           <h2 style={{ margin: 0 }}>Material Purchase</h2>
           <div style={{ color: "#666", marginTop: 4 }}>
-            Only scheduling-ready jobs are available here.
+            Only jobs with completed Drafting are available here.
           </div>
         </div>
 

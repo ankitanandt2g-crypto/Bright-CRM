@@ -6,29 +6,23 @@ const Job = mongoose.models.Job;
 if (!MaterialPurchase) throw new Error("MaterialPurchase model not loaded");
 if (!Job) throw new Error("Job model not loaded");
 
-const syncJobMaterialStage = async (jobObjectId) => {
+const syncJobMaterialStage = async (jobObjectId, isCompleted = false) => {
   if (!jobObjectId) return;
 
   const job = await Job.findById(jobObjectId);
   if (!job) return;
 
-  // aage ke stages ko backward mat karo
-  if (
-    ["Fabrication", "Quality Control", "Installation", "Closure"].includes(
-      job.stage
-    )
-  ) {
-    return;
+  if (!job.workflowEvents) job.workflowEvents = {};
+  if (!job.workflowEvents.materialPurchasing) job.workflowEvents.materialPurchasing = {};
+
+  if (isCompleted && !job.workflowEvents.materialPurchasing.isCompleted) {
+    job.workflowEvents.materialPurchasing.isCompleted = true;
+    job.workflowEvents.materialPurchasing.completedAt = new Date();
+    job.workflowEvents.materialPurchasing.completedBy = "Material Purchase Module";
   }
 
-  await Job.findByIdAndUpdate(
-    jobObjectId,
-    {
-      stage: "Material Purchase",
-      status: "Active",
-    },
-    { new: true }
-  );
+  job.markModified("workflowEvents");
+  await job.save();
 };
 
 // GET /api/material-purchase/list/:jobId
@@ -132,7 +126,7 @@ exports.create = async (req, res) => {
       remarks: payload.remarks || "",
     });
 
-    await syncJobMaterialStage(payload.jobId);
+    await syncJobMaterialStage(payload.jobId, payload.status === "Received" || payload.status === "Completed");
 
     return res.status(201).json({
       success: true,
@@ -184,7 +178,7 @@ exports.update = async (req, res) => {
       }
     );
 
-    await syncJobMaterialStage(updated.jobId);
+    await syncJobMaterialStage(updated.jobId, payload.status === "Received" || updated.status === "Received" || payload.status === "Completed" || updated.status === "Completed");
 
     return res.status(200).json({
       success: true,

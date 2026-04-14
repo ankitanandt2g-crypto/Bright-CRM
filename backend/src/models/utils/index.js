@@ -1,9 +1,11 @@
-const { basename, extname } = require('path');
+const { basename, extname, join, resolve } = require('path');
 const { globSync } = require('glob');
 
-const appModelsFiles = globSync('./src/models/appModels/**/*.js');
+const rootDir = resolve(__dirname, '../../..'); // backend root
+const toGlobPath = (p) => p.replace(/\\/g, '/');
 
-const pattern = './src/models/**/*.js';
+const appModelsFiles = globSync(toGlobPath(join(rootDir, 'src/models/appModels/**/*.js')));
+const pattern = toGlobPath(join(rootDir, 'src/models/**/*.js'));
 
 const modelsFiles = globSync(pattern).map((filePath) => {
   const fileNameWithExtension = basename(filePath);
@@ -33,7 +35,7 @@ for (const filePath of appModelsFiles) {
   );
   const entity = fileNameWithoutExtension.toLowerCase();
 
-  controllerName = fileNameLowerCaseFirstChar + 'Controller';
+  const controllerName = fileNameLowerCaseFirstChar + 'Controller';
   constrollersList.push(controllerName);
   appModelsList.push(modelName);
   entityList.push(entity);

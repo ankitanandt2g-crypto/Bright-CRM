@@ -9,23 +9,21 @@ import { useLayoutEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
 
-import { Card, Descriptions, Divider, Tag, Space, Button, message } from "antd";
+import { Card, Descriptions, Divider, Tag, Space, Button, message, Modal, Form, Select, Input } from "antd";
 import { approveQuote } from "../quoteApi";
+
+const { Option } = Select;
 
 const statusColor = (status) => {
   switch (status) {
-    case "Approved":
+    case "Accepted":
       return "green";
-    case "Converted to Job":
-      return "blue";
     case "Sent":
       return "gold";
     case "Rejected":
       return "red";
-    case "Expired":
-      return "volcano";
-    case "Client Viewed":
-      return "purple";
+    case "Draft":
+      return "default";
     default:
       return "default";
   }
@@ -54,22 +52,25 @@ export default function ReadQuoteModule({ config }) {
 
   const [approving, setApproving] = useState(false);
   const [jobIdCreated, setJobIdCreated] = useState(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [form] = Form.useForm();
 
   const canApprove =
     currentResult &&
-    !["Approved", "Converted to Job", "Rejected"].includes(currentResult?.status);
+    !["Accepted", "Converted to Job", "Rejected"].includes(currentResult?.status);
 
-  const handleApprove = async () => {
+  const handleApprove = async (values) => {
     try {
       setApproving(true);
 
-      const res = await approveQuote(id);
+      const res = await approveQuote(id, values);
 
-      message.success("Quote approved. Job created.");
+      message.success("Quote accepted. Job created and Quote locked.");
 
       const jobId = res?.jobId || res?.result?.jobId || res?.result?._id;
       if (jobId) setJobIdCreated(jobId);
 
+      setIsModalVisible(false);
       dispatch(erp.read({ entity: safeConfig.entity, id }));
     } catch (err) {
       message.error(
@@ -108,10 +109,9 @@ export default function ReadQuoteModule({ config }) {
                 <Button
                   type="primary"
                   disabled={!canApprove}
-                  loading={approving}
-                  onClick={handleApprove}
+                  onClick={() => setIsModalVisible(true)}
                 >
-                  Approve Quote → Create Job
+                  Accept Quote → Create Job
                 </Button>
 
                 {(jobIdCreated || currentResult?.jobId) && (
@@ -198,14 +198,6 @@ export default function ReadQuoteModule({ config }) {
                 {currentResult.siteAddress || "-"}
               </Descriptions.Item>
 
-              <Descriptions.Item label="Project Type">
-                {currentResult.projectType || "-"}
-              </Descriptions.Item>
-
-              <Descriptions.Item label="Balustrade Type">
-                {currentResult.balustradeType || "-"}
-              </Descriptions.Item>
-
               <Descriptions.Item label="Lead Source">
                 {currentResult.leadSource || "-"}
               </Descriptions.Item>
@@ -267,6 +259,41 @@ export default function ReadQuoteModule({ config }) {
       ) : (
         <NotFound entity={safeConfig.entity} />
       )}
+
+      <Modal
+        title="Confirm Quote Acceptance"
+        open={isModalVisible}
+        onOk={() => form.submit()}
+        onCancel={() => setIsModalVisible(false)}
+        confirmLoading={approving}
+        okText="Accept and Lock Quote"
+      >
+        <Form form={form} layout="vertical" onFinish={handleApprove}>
+          <Form.Item
+            name="method"
+            label="Acceptance Method"
+            rules={[{ required: true, message: "Please select the acceptance method" }]}
+          >
+            <Select placeholder="Select Method">
+              <Option value="Email">Email</Option>
+              <Option value="System">System (E-Sign)</Option>
+              <Option value="Manual Confirmation">Manual Confirmation</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="acceptedBy"
+            label="Confirmed By (User/Client Name)"
+            rules={[{ required: true, message: "Please specify who confirmed this" }]}
+          >
+            <Input placeholder="E.g., John Doe" />
+          </Form.Item>
+          
+          <Divider />
+          <p style={{ color: "red" }}>
+            <strong>Warning:</strong> Accepting this quote will permanently lock it from further editing and immediately generate a Job order.
+          </p>
+        </Form>
+      </Modal>
     </ErpLayout>
   );
 }

@@ -11,8 +11,15 @@ if (major < 20) {
 }
 
 // import environmental variables from our variables.env file
-require('dotenv').config({ path: '.env' });
-require('dotenv').config({ path: '.env.local' });
+const envPath = path.resolve(__dirname, '../.env');
+const envLocalPath = path.resolve(__dirname, '../.env.local');
+require('dotenv').config({ path: envPath });
+require('dotenv').config({ path: envLocalPath });
+
+if (!process.env.DATABASE) {
+  console.error('🔥 DATABASE URL not found in .env (backend/.env required).');
+  process.exit(1);
+}
 
 mongoose.connect(process.env.DATABASE);
 
@@ -25,7 +32,8 @@ mongoose.connection.on('error', (error) => {
   console.error(`2. 🚫 Error → : ${error.message}`);
 });
 
-const modelsFiles = globSync('./src/models/**/*.js');
+const rootDir = path.resolve(__dirname);
+const modelsFiles = globSync(path.join(rootDir, 'models/**/*.js').replace(/\\/g, '/'));
 
 for (const filePath of modelsFiles) {
   require(path.resolve(filePath));

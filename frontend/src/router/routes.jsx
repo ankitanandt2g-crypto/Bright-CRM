@@ -17,6 +17,7 @@ import CustomerDashboard from "../pages/CustomerPortal/Dashboard";
 import CustomerLogin from "../pages/CustomerPortal/Login";
 import CustomerProjects from "../pages/CustomerPortal/Projects";
 import CustomerProjectDetails from "../pages/CustomerPortal/ProjectDetails";
+import ContactUs from "../pages/CustomerPortal/ContactUs";
 
 import CustomerProtectedRoute from "./CustomerProtectedRoute";
 
@@ -95,6 +96,7 @@ const routes = {
         { path: "dashboard", element: <CustomerDashboard /> },
         { path: "projects", element: <CustomerProjects /> },
         { path: "projects/:id", element: <CustomerProjectDetails /> },
+        { path: "contact-us", element: <ContactUs /> },
 
         { path: "payments", element: <div style={{ padding: 16 }}>Payments Page</div> },
         { path: "enquiry", element: <div style={{ padding: 16 }}>Enquiry Page</div> },

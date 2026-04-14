@@ -3,10 +3,27 @@ const mongoose = require("mongoose");
 const Lead = mongoose.models.Lead;
 const Job = mongoose.models.Job;
 const Customer = mongoose.models.Customer;
+const User = mongoose.models.User;
+
+const bcrypt = require("bcryptjs");
+const { generate: uniqueId } = require('shortid');
+const sendMail = require("../controllers/middlewaresControllers/createAuthMiddleware/sendMail");
 
 if (!Lead) throw new Error("Lead model not loaded");
 if (!Job) throw new Error("Job model not loaded");
 if (!Customer) throw new Error("Customer model not loaded");
+if (!User) throw new Error("User model not loaded");
+
+// ✅ GET /api/lead/read/:id
+exports.readLead = async (req, res) => {
+  try {
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
+    return res.json({ success: true, result: lead });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
 
 // ✅ GET /api/lead/list
 exports.listLeads = async (req, res) => {
@@ -15,6 +32,41 @@ exports.listLeads = async (req, res) => {
     return res.json({ success: true, result: leads });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ✅ POST /api/lead/:id/interaction
+exports.addInteraction = async (req, res) => {
+  try {
+    const { type, notes, createdBy } = req.body;
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
+    
+    if (lead.isLocked) {
+      return res.status(400).json({ success: false, message: "Cannot modify a locked lead" });
+    }
+
+    lead.interactions.push({
+      type: type || "Note",
+      notes: notes,
+      createdBy: createdBy || "System",
+      date: new Date()
+    });
+    
+    // Update next follow-up date if provided
+    if (req.body.nextFollowUpDate) {
+      lead.nextFollowUpDate = new Date(req.body.nextFollowUpDate);
+    }
+    
+    // Update status if provided
+    if (req.body.status) {
+      lead.status = req.body.status;
+    }
+
+    await lead.save();
+    return res.json({ success: true, result: lead, message: "Interaction added" });
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
   }
 };
 
@@ -96,6 +148,45 @@ exports.createJobFromLead = async (req, res) => {
 
         status: "Active",
       });
+
+      // ✅ Only create User account if email is available
+      if (emailLower) {
+        // ✅ Check if user already exists
+        const existingUser = await User.findOne({ email: emailLower, role: "customer" });
+        if (!existingUser) {
+          // ✅ Generate random password for customer
+          const randomPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4);
+          const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+          // ✅ Create User account for customer
+          const user = await User.create({
+            name: customer.name,
+            companyName: customer.companyName,
+            email: emailLower,
+            mobile: lead.phone || "",
+            password: hashedPassword,
+            role: "customer",
+            isActive: true,
+          });
+
+          // ✅ Send onboarding email
+          try {
+            const idurar_app_email = process.env.IDURAR_APP_EMAIL || "noreply@idurarapp.com";
+            await sendMail({
+              email: emailLower,
+              name: customer.name,
+              link: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/portal/login`,
+              idurar_app_email,
+              subject: 'Welcome to IDURAR - Your Account is Ready',
+              type: 'customerOnboarding',
+              password: randomPassword,
+            });
+          } catch (emailError) {
+            console.error("Failed to send customer onboarding email:", emailError);
+            // Don't fail the whole operation if email fails
+          }
+        }
+      }
     }
 
     // =========================
@@ -119,6 +210,9 @@ exports.createJobFromLead = async (req, res) => {
 
       // ✅ Job model me customer string hai, so store customer name here
       customer: customer.name || "",
+
+      // ✅ Also set customerId for proper linking
+      customerId: customer._id,
 
       // ✅ Job model me site string hai
       site: lead.siteAddress || "",

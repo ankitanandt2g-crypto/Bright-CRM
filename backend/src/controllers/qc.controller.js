@@ -1,30 +1,28 @@
 const mongoose = require("mongoose");
 
-const Qc = mongoose.models.Qc;
-const Job = mongoose.models.Job;
+const Qc = require("../models/appModels/Qc");
+const Job = require("../models/appModels/Job");
 
 if (!Qc) throw new Error("Qc model not loaded");
 if (!Job) throw new Error("Job model not loaded");
 
-const syncJobQcStage = async (jobObjectId) => {
+const syncJobQcStage = async (jobObjectId, isCompleted = false) => {
   if (!jobObjectId) return;
 
   const job = await Job.findById(jobObjectId);
   if (!job) return;
 
-  // aage ke stages ko backward mat karo
-  if (["Installation", "Closure"].includes(job.stage)) {
-    return;
+  if (!job.workflowEvents) job.workflowEvents = {};
+  if (!job.workflowEvents.finishing) job.workflowEvents.finishing = {};
+
+  if (isCompleted && !job.workflowEvents.finishing.isCompleted) {
+    job.workflowEvents.finishing.isCompleted = true;
+    job.workflowEvents.finishing.completedAt = new Date();
+    job.workflowEvents.finishing.completedBy = "Quality Control Module";
   }
 
-  await Job.findByIdAndUpdate(
-    jobObjectId,
-    {
-      stage: "Quality Control",
-      status: "Active",
-    },
-    { new: true }
-  );
+  job.markModified("workflowEvents");
+  await job.save();
 };
 
 // GET /api/qc/list/:jobId
@@ -123,7 +121,7 @@ exports.create = async (req, res) => {
       remarks: payload.remarks || "",
     });
 
-    await syncJobQcStage(payload.jobId);
+    await syncJobQcStage(payload.jobId, payload.status === "Approved" || payload.status === "Completed");
 
     return res.status(201).json({
       success: true,
@@ -157,7 +155,7 @@ exports.update = async (req, res) => {
       runValidators: true,
     });
 
-    await syncJobQcStage(updated.jobId);
+    await syncJobQcStage(updated.jobId, req.body.status === "Approved" || updated.status === "Approved" || req.body.status === "Completed" || updated.status === "Completed");
 
     return res.status(200).json({
       success: true,

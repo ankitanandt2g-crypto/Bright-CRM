@@ -1,9 +1,8 @@
 const mongoose = require('mongoose');
 
-const Model = mongoose.model('Setting');
-
 const listAllSettings = async () => {
   try {
+    const Model = mongoose.models.Setting || mongoose.model('Setting');
     //  Query the database for a list of all results
     const result = await Model.find({
       removed: false,

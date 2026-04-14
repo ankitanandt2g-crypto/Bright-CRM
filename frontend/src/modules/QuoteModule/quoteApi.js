@@ -13,8 +13,8 @@ export const createQuote = async (payload) => {
   return res.data;
 };
 
-export const approveQuote = async (quoteId) => {
-  const res = await axios.post(`${API}/approve/${quoteId}`, {}, {
+export const approveQuote = async (quoteId, payload = {}) => {
+  const res = await axios.post(`${API}/approve/${quoteId}`, payload, {
     headers: { ...authHeaders() },
   });
   return res.data;

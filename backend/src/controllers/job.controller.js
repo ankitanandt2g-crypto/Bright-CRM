@@ -112,22 +112,21 @@ exports.deleteJob = async (req, res) => {
 // PATCH /api/job/update/:id
 exports.updateJob = async (req, res) => {
   try {
-    const updated = await Job.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
+    const job = await Job.findById(req.params.id);
 
-    if (!updated) {
+    if (!job) {
       return res.status(404).json({
         success: false,
         result: null,
         message: "Job not found",
       });
     }
+
+    // Update the job with new data
+    Object.assign(job, req.body);
+
+    // Save to trigger pre-save hooks for systemState calculation
+    const updated = await job.save();
 
     return res.status(200).json({
       success: true,
@@ -143,46 +142,130 @@ exports.updateJob = async (req, res) => {
   }
 };
 
-// POST /api/job/from-lead/:leadId
-exports.createJobFromLead = async (req, res) => {
+// PATCH /api/job/stage/:id/:stageName
+exports.updateJobStage = async (req, res) => {
   try {
-    const leadId = req.params.leadId;
+    const { id, stageName } = req.params;
+    const allowedStages = [
+      "siteMeasurement",
+      "planning",
+      "drafting",
+      "clientApproval",
+      "materialPurchasing",
+      "fabrication",
+      "finishing",
+      "installation",
+      "jobCompletion",
+    ];
 
-    const lead = await Lead.findById(leadId);
-
-    if (!lead) {
-      return res.status(404).json({
-        success: false,
-        result: null,
-        message: "Lead not found",
-      });
+    if (!allowedStages.includes(stageName)) {
+      return res.status(400).json({ success: false, message: "Invalid stage name" });
     }
 
-    const existing = await Job.findOne({ leadId });
-
-    if (existing) {
-      return res.status(200).json({
-        success: true,
-        result: existing,
-        message: "Job already exists for this lead",
-      });
+    const job = await Job.findById(id);
+    if (!job) {
+      return res.status(404).json({ success: false, message: "Job not found" });
     }
 
-    const job = await Job.create({
-      jobId: generateJobId(),
-      customer: lead.clientName,
-      site: lead.siteAddress,
-      stage: "Backlog",
-      status: "Backlog",
-      leadId: lead._id,
-    });
+    // Initialize if empty to be safe
+    if (!job.workflowEvents) job.workflowEvents = {};
+    if (!job.workflowEvents[stageName]) job.workflowEvents[stageName] = {};
 
-    await Lead.findByIdAndUpdate(leadId, { status: "Converted" });
+    // Merge data
+    const updateData = req.body;
+    job.workflowEvents[stageName] = { ...job.workflowEvents[stageName], ...updateData };
 
-    return res.status(201).json({
+    // Auto timestamp if marked completed
+    if (updateData.isCompleted && !job.workflowEvents[stageName].completedAt) {
+      job.workflowEvents[stageName].completedAt = new Date();
+      job.workflowEvents[stageName].completedBy = req.admin?.name || req.user?.name || updateData.completedBy || "System Admin";
+    }
+
+    job.markModified("workflowEvents");
+    await job.save();
+
+    return res.status(200).json({
       success: true,
       result: job,
-      message: "Lead converted to Job",
+      message: `Stage ${stageName} updated successfully`,
+    });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+};
+
+const moment = require("moment");
+
+// GET /api/job/summary
+exports.summaryJobs = async (req, res) => {
+  try {
+    const { type, startDate, endDate } = req.query;
+    let start = moment().startOf('month');
+    let end = moment().endOf('month');
+
+    if (type === 'today') {
+      start = moment().startOf('day');
+      end = moment().endOf('day');
+    } else if (type === 'thisWeek') {
+      start = moment().startOf('week');
+      end = moment().endOf('week');
+    } else if (type === 'thisMonth') {
+      start = moment().startOf('month');
+      end = moment().endOf('month');
+    } else if (type === 'custom' && startDate && endDate) {
+      start = moment(startDate).startOf('day');
+      end = moment(endDate).endOf('day');
+    }
+
+    const dateMatch = {
+      removed: false,
+      createdAt: {
+        $gte: start.toDate(),
+        $lte: end.toDate(),
+      },
+    };
+
+    const activeJobsCount = await Job.countDocuments({
+      ...dateMatch,
+      systemState: "Active",
+    });
+
+    const stages = [
+      "siteMeasurement",
+      "planning",
+      "drafting",
+      "clientApproval",
+      "materialPurchasing",
+      "fabrication",
+      "finishing",
+      "installation",
+      "jobCompletion",
+    ];
+
+    // Refined stage count: first non-completed stage
+    const allJobs = await Job.find(dateMatch);
+    const refinedStageCounts = {};
+    stages.forEach(s => refinedStageCounts[s] = 0);
+    refinedStageCounts["Completed"] = 0;
+
+    allJobs.forEach(job => {
+      let currentStage = "Completed";
+      for (const stage of stages) {
+        if (!job.workflowEvents?.[stage]?.isCompleted) {
+          currentStage = stage;
+          break;
+        }
+      }
+      refinedStageCounts[currentStage]++;
+    });
+
+    return res.status(200).json({
+      success: true,
+      result: {
+        activeJobsCount,
+        stageCounts: refinedStageCounts,
+      },
+      message: "Job summary fetched",
     });
   } catch (e) {
     return res.status(500).json({

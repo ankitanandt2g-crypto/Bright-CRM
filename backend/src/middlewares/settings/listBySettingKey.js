@@ -1,9 +1,8 @@
 const mongoose = require('mongoose');
 
-const Model = mongoose.model('Setting');
-
 const listBySettingKey = async ({ settingKeyArray = [] }) => {
   try {
+    const Model = mongoose.models.Setting || mongoose.model('Setting');
     // Find document by id
 
     const settingsToShow = { $or: [] };

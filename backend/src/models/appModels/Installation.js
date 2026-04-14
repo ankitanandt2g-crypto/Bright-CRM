@@ -47,6 +47,14 @@ const installationSchema = new mongoose.Schema(
             default: "",
             trim: true,
         },
+        expectedHours: {
+            type: Number,
+            default: 0,
+        },
+        actualHours: {
+            type: Number,
+            default: 0,
+        },
     },
     { timestamps: true }
 );

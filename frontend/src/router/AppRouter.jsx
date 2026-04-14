@@ -15,7 +15,9 @@ import AdminLayout from "../pages/Admin/Dashboard/AdminLayout";
 
 // ✅ Your completed pages
 import Lead from "../pages/Lead";
+import LeadView from "../pages/Lead/LeadView";
 import Jobs from "../pages/Jobs";
+import JobView from "../pages/Jobs/JobView";
 import Kanban from "../pages/Kanban";
 import Planning from "../pages/Planning";
 import SiteMeasurement from "../pages/sitemeasurement";
@@ -39,6 +41,9 @@ import CustomerLogin from "../pages/CustomerPortal/Login";
 import CustomerDashboard from "../pages/CustomerPortal/Dashboard";
 import CustomerProjects from "../pages/CustomerPortal/Projects";
 import CustomerProjectDetails from "../pages/CustomerPortal/ProjectDetails";
+import CustomerInvoices from "../pages/CustomerPortal/Invoices";
+import ContactUs from "../pages/CustomerPortal/ContactUs";
+import ContactRequests from "../pages/Admin/ContactRequests";
 
 // ✅ Idurar modules
 import DashboardModule from "../modules/DashboardModule";
@@ -99,7 +104,9 @@ export default function AppRouter() {
           <Route index element={<DashboardModule />} />
 
           <Route path="lead" element={<Lead />} />
+          <Route path="lead/:id" element={<LeadView />} />
           <Route path="jobs" element={<Jobs />} />
+          <Route path="job/:id" element={<JobView />} />
 
           {/* ✅ Planning group */}
           <Route path="site-measurement" element={<SiteMeasurement />} />
@@ -144,6 +151,7 @@ export default function AppRouter() {
 
           {/* ✅ PAYMENT */}
           <Route path="payment" element={<PaymentDataTableModule />} />
+          <Route path="contact-requests" element={<ContactRequests />} />
           <Route path="payment/read/:id" element={<ReadPaymentModule />} />
           <Route path="payment/update/:id" element={<UpdatePaymentModule />} />
 
@@ -175,6 +183,8 @@ export default function AppRouter() {
           <Route path="projects" element={<CustomerProjects />} />
           <Route path="projects/:id" element={<CustomerProjectDetails />} />
 
+          <Route path="contact-us" element={<ContactUs />} />
+          <Route path="invoices" element={<CustomerInvoices />} />
           <Route path="payments" element={<div style={{ padding: 16 }}>Payments Page</div>} />
           <Route path="enquiry" element={<div style={{ padding: 16 }}>Enquiry Page</div>} />
 

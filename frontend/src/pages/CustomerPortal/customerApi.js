@@ -1,4 +1,3 @@
-// frontend/src/pages/CustomerPortal/customerApi.js
 import axios from "axios";
 
 const API_BASE = "http://localhost:8888/api";
@@ -8,27 +7,67 @@ const authHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+// ================= LOGIN =================
+export const customerLogin = async ({ identifier, password, role = "customer" }) => {
+  const res = await axios.post(`${API_BASE}/auth/login`, {
+    role,
+    identifier,
+    password,
+  });
+
+  return res.data;
+};
+
+// ================= PROFILE =================
 export const customerGetMe = async () => {
-  const res = await axios.get(`${API_BASE}/customer/me`, { headers: authHeaders() });
+  const res = await axios.get(`${API_BASE}/customer/me`, {
+    headers: authHeaders(),
+  });
   return res.data?.result;
 };
 
+// ================= PROJECTS =================
 export const customerGetProjects = async () => {
-  const res = await axios.get(`${API_BASE}/customer/projects`, { headers: authHeaders() });
+  const res = await axios.get(`${API_BASE}/customer/projects`, {
+    headers: authHeaders(),
+  });
   return res.data?.result || [];
 };
 
 export const customerGetProjectById = async (id) => {
-  const res = await axios.get(`${API_BASE}/customer/projects/${id}`, { headers: authHeaders() });
+  const res = await axios.get(`${API_BASE}/customer/projects/${id}`, {
+    headers: authHeaders(),
+  });
   return res.data?.result;
 };
 
+// ================= PAYMENTS =================
 export const customerGetPaymentSummary = async () => {
-  const res = await axios.get(`${API_BASE}/customer/payments/summary`, { headers: authHeaders() });
+  const res = await axios.get(`${API_BASE}/customer/payments/summary`, {
+    headers: authHeaders(),
+  });
   return res.data?.result;
 };
 
-export const customerSubmitEnquiry = async (payload) => {
-  const res = await axios.post(`${API_BASE}/customer/enquiry`, payload, { headers: authHeaders() });
+// ================= INVOICES =================
+export const customerGetInvoices = async () => {
+  const res = await axios.get(`${API_BASE}/customer/invoices`, {
+    headers: authHeaders(),
+  });
+  return res.data?.result || [];
+};
+
+export const customerNotifyPayment = async (id, data) => {
+  const res = await axios.post(`${API_BASE}/customer/invoice/notify/${id}`, data, {
+    headers: authHeaders(),
+  });
+  return res.data;
+};
+
+// ================= CONTACT =================
+export const createContact = async (data) => {
+  const res = await axios.post(`${API_BASE}/contact/create`, data, {
+    headers: authHeaders(),
+  });
   return res.data;
 };

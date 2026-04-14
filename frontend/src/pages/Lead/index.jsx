@@ -2,8 +2,12 @@ import { useEffect, useState } from "react";
 import { Button, Table, Space, Popconfirm, Select, Tag, message } from "antd";
 import { useNavigate } from "react-router-dom";
 
+import dayjs from "dayjs";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 import LeadForm from "./LeadForm";
 import { getLeads, createLead, updateLead, deleteLead } from "./leadApi";
+
+dayjs.extend(isSameOrBefore);
 
 const { Option } = Select;
 
@@ -12,8 +16,9 @@ const statusColor = (status) => {
   switch (status) {
     case "Quoted":
       return "purple";
-    case "Qualified":
-      return "blue";
+    case "Converted":
+    case "Locked":
+      return "success";
     case "Contacted":
       return "gold";
     case "Lost":
@@ -93,62 +98,91 @@ export default function Lead() {
   const columns = [
     { title: "Client Name", dataIndex: "clientName" },
     { title: "Contact", render: (_, r) => `${r.phone || ""}${r.email ? ` | ${r.email}` : ""}` },
-    { title: "Site Address", dataIndex: "siteAddress" },
-    { title: "Project Type", dataIndex: "projectType" },
-    { title: "Balustrade Type", dataIndex: "balustradeType" },
+    { title: "Job Location", dataIndex: "siteAddress" },
+    { title: "Category", dataIndex: "category" },
+    { 
+      title: "Salesperson", 
+      dataIndex: "assignedSalesperson",
+      render: (v) => v || "-"
+    },
+    {
+      title: "Next Follow Up",
+      dataIndex: "nextFollowUpDate",
+      render: (date) => {
+        if (!date) return <Tag color="warning">Not set</Tag>;
+        const isOverdue = dayjs(date).isSameOrBefore(dayjs(), 'day');
+        return <Tag color={isOverdue ? "error" : "success"}>{dayjs(date).format("DD MMM YYYY")}</Tag>;
+      }
+    },
     {
       title: "Lead Source",
       dataIndex: "leadSource",
       render: (v) => <Tag>{v}</Tag>,
     },
 
-    // ✅ Status with colored tag
     {
       title: "Status",
-      render: (_, record) => (
-        <Space>
-          <Tag color={statusColor(record.status)} style={{ minWidth: 90, textAlign: "center" }}>
-            {record.status || "New"}
-          </Tag>
+      render: (_, record) => {
+        const isLocked = record.isLocked || record.status === "Locked" || record.status === "Converted";
+        if (isLocked) {
+          return <Tag color={statusColor(record.status)}>{record.status}</Tag>;
+        }
+        return (
+          <Space>
+            <Tag color={statusColor(record.status)} style={{ minWidth: 90, textAlign: "center" }}>
+              {record.status || "New"}
+            </Tag>
 
-          <Select
-            value={record.status || "New"}
-            style={{ width: 140 }}
-            onChange={(v) => handleStatusChange(v, record)}
-          >
-            <Option value="New">New</Option>
-            <Option value="Contacted">Contacted</Option>
-            <Option value="Qualified">Qualified</Option>
-            <Option value="Quoted">Quoted</Option>
-            <Option value="Lost">Lost</Option>
-          </Select>
-        </Space>
-      ),
+            <Select
+              value={record.status || "New"}
+              style={{ width: 140 }}
+              onChange={(v) => handleStatusChange(v, record)}
+            >
+              <Option value="New">New</Option>
+              <Option value="Contacted">Contacted</Option>
+              <Option value="Quoted">Quoted</Option>
+              <Option value="Lost">Lost</Option>
+            </Select>
+          </Space>
+        );
+      },
     },
 
     {
       title: "Actions",
-      render: (_, record) => (
+      render: (_, record) => {
+        const isLocked = record.isLocked || record.status === "Locked" || record.status === "Converted";
+        return (
         <Space wrap>
-          <Button
-            onClick={() => {
-              setEditData(record);
-              setOpen(true);
-            }}
+          <Button 
+            onClick={() => navigate(`/admin/lead/${record._id}`)}
           >
-            Edit
+            View Details
           </Button>
 
-          <Popconfirm title="Delete lead?" onConfirm={() => handleDelete(record._id)}>
-            <Button danger>Delete</Button>
-          </Popconfirm>
+          {!isLocked && (
+            <>
+              <Button
+                onClick={() => {
+                  setEditData(record);
+                  setOpen(true);
+                }}
+              >
+                Edit
+              </Button>
 
-          {/* ✅ Correct Flow Button */}
-          <Button type="primary" onClick={() => handleCreateQuote(record)}>
-            Create Quote
-          </Button>
+              <Popconfirm title="Delete lead?" onConfirm={() => handleDelete(record._id)}>
+                <Button danger>Delete</Button>
+              </Popconfirm>
+
+              <Button type="primary" onClick={() => handleCreateQuote(record)}>
+                Create Quote
+              </Button>
+            </>
+          )}
         </Space>
-      ),
+      );
+      },
     },
   ];
 

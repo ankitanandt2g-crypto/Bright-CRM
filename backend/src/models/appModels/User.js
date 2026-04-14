@@ -19,6 +19,7 @@ const UserSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
+      unique: true,
       lowercase: true,
       trim: true,
     },
@@ -46,6 +47,13 @@ const UserSchema = new mongoose.Schema(
       type: String,
       unique: true,
       sparse: true,
+      trim: true,
+    },
+
+    customer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Customer",
+      default: null,
     },
 
     isActive: {
@@ -53,8 +61,19 @@ const UserSchema = new mongoose.Schema(
       default: true,
     },
 
-    resetPasswordTokenHash: String,
-    resetPasswordExpires: Date,
+    resetPasswordTokenHash: {
+      type: String,
+      default: null,
+    },
+
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+    },
+    phoneOTP: String,
+    phoneOTPExpires: Date,
+    emailOTP: String,
+    emailOTPExpires: Date,
   },
   {
     timestamps: true,

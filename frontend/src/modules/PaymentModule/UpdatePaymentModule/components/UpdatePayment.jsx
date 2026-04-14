@@ -13,7 +13,7 @@ import calculate from '@/utils/calculate';
 import PaymentForm from '@/forms/PaymentForm';
 import { useNavigate } from 'react-router-dom';
 
-export default function UpdatePayment({ config, currentInvoice }) {
+export default function UpdatePayment({ config, currentPayment }) {
   const translate = useLanguage();
   const navigate = useNavigate();
   let { entity } = config;
@@ -26,44 +26,44 @@ export default function UpdatePayment({ config, currentInvoice }) {
   const [maxAmount, setMaxAmount] = useState(0);
 
   useEffect(() => {
-    if (currentInvoice) {
-      const { credit, total, discount, amount } = currentInvoice;
-
-      setMaxAmount(
-        calculate.sub(calculate.sub(total, discount), calculate.sub(calculate.sub(credit, amount)))
-      );
-      const newInvoiceValues = { ...currentInvoice };
-      if (newInvoiceValues.date) {
-        newInvoiceValues.date = dayjs(newInvoiceValues.date);
+    if (currentPayment) {
+      const { invoice, amount } = currentPayment;
+      
+      if (invoice) {
+        // Max this payment can be is (Current Amount Due + This payment's current amount)
+        setMaxAmount(invoice.amountDue + amount);
       }
-      form.setFieldsValue(newInvoiceValues);
+
+      const newValues = { ...currentPayment };
+      if (newValues.date) {
+        newValues.date = dayjs(newValues.date);
+      }
+      form.setFieldsValue(newValues);
     }
-  }, [currentInvoice]);
+  }, [currentPayment]);
 
   useEffect(() => {
     if (isSuccess) {
       form.resetFields();
       dispatch(erp.resetAction({ actionType: 'recordPayment' }));
       dispatch(erp.list({ entity }));
-      navigate(`/${entity.toLowerCase()}/read/${currentInvoice._id}`);
+      navigate(`/${entity.toLowerCase()}/read/${currentPayment._id}`);
     }
   }, [isSuccess]);
 
   const onSubmit = (fieldsValue) => {
-    if (currentInvoice) {
-      const { _id: invoice } = currentInvoice;
-      const client = currentInvoice.client && currentInvoice.client._id;
+    if (currentPayment) {
+      const { invoice } = currentPayment;
       fieldsValue = {
         ...fieldsValue,
-        invoice,
-        client,
+        invoice: invoice?._id,
       };
     }
 
     dispatch(
       erp.update({
         entity,
-        id: currentInvoice._id,
+        id: currentPayment._id,
         jsonData: fieldsValue,
       })
     );

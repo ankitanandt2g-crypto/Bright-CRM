@@ -18,11 +18,7 @@ const { TextArea } = Input;
 const STATUS = [
   "Draft",
   "Sent",
-  "Client Viewed",
-  "Approved",
   "Rejected",
-  "Expired",
-  "Converted to Job",
 ];
 
 export default function QuoteForm({
@@ -31,6 +27,7 @@ export default function QuoteForm({
   onSubmit,
   onCancel,
   loading = false,
+  isLocked = false,
 }) {
   useEffect(() => {
     if (!initialValues) return;
@@ -110,31 +107,53 @@ export default function QuoteForm({
           </Form.Item>
         </Col>
 
-        <Col xs={24} md={8}>
-          <Form.Item
-            label="Project Type"
-            name="projectType"
-            rules={[{ required: true, message: "Project type is required" }]}
-          >
-            <Input disabled />
-          </Form.Item>
-        </Col>
-
-        <Col xs={24} md={8}>
-          <Form.Item
-            label="Balustrade Type"
-            name="balustradeType"
-            rules={[
-              { required: true, message: "Balustrade type is required" },
-            ]}
-          >
-            <Input disabled />
-          </Form.Item>
-        </Col>
-
-        <Col xs={24} md={8}>
+        <Col xs={24} md={12}>
           <Form.Item label="Lead Source" name="leadSource">
             <Input disabled />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Divider orientation="left">Quote Configuration (Order ID Settings)</Divider>
+      <Row gutter={16}>
+        <Col xs={24} md={6}>
+          <Form.Item label="Value Level" name="valueLevel" rules={[{ required: true }]}>
+            <Select disabled={isLocked}>
+              <Select.Option value="High">High</Select.Option>
+              <Select.Option value="Medium">Medium</Select.Option>
+              <Select.Option value="Low">Low</Select.Option>
+            </Select>
+          </Form.Item>
+        </Col>
+
+        <Col xs={24} md={6}>
+          <Form.Item label="Priority" name="priority" rules={[{ required: true }]}>
+            <Select disabled={isLocked}>
+              <Select.Option value={1}>1 - Urgent</Select.Option>
+              <Select.Option value={2}>2 - Normal</Select.Option>
+              <Select.Option value={3}>3 - Low</Select.Option>
+            </Select>
+          </Form.Item>
+        </Col>
+
+        <Col xs={24} md={6}>
+          <Form.Item label="Category" name="categoryCode" rules={[{ required: true }]}>
+            <Select disabled={isLocked}>
+              <Select.Option value="Commercial">Commercial</Select.Option>
+              <Select.Option value="Residential">Residential</Select.Option>
+            </Select>
+          </Form.Item>
+        </Col>
+
+        <Col xs={24} md={6}>
+          <Form.Item label="Material" name="materialCode" rules={[{ required: true }]}>
+            <Select disabled={isLocked}>
+              <Select.Option value="Aluminium">Aluminium</Select.Option>
+              <Select.Option value="Glass">Glass</Select.Option>
+              <Select.Option value="Stainless Steel">Stainless Steel</Select.Option>
+              <Select.Option value="Wood">Wood</Select.Option>
+              <Select.Option value="Other">Other</Select.Option>
+            </Select>
           </Form.Item>
         </Col>
       </Row>
@@ -145,7 +164,7 @@ export default function QuoteForm({
         name="scope"
         rules={[{ required: true, message: "Scope definition is required" }]}
       >
-        <TextArea rows={3} placeholder="Detailed work breakdown..." />
+        <TextArea rows={3} placeholder="Detailed work breakdown..." disabled={isLocked} />
       </Form.Item>
 
       <Row gutter={16}>
@@ -155,7 +174,7 @@ export default function QuoteForm({
             name="inclusions"
             rules={[{ required: true, message: "Inclusions are required" }]}
           >
-            <TextArea rows={4} placeholder="What is included?" />
+            <TextArea rows={4} placeholder="What is included?" disabled={isLocked} />
           </Form.Item>
         </Col>
 
@@ -165,13 +184,13 @@ export default function QuoteForm({
             name="exclusions"
             rules={[{ required: true, message: "Exclusions are required" }]}
           >
-            <TextArea rows={4} placeholder="What is excluded?" />
+            <TextArea rows={4} placeholder="What is excluded?" disabled={isLocked} />
           </Form.Item>
         </Col>
       </Row>
 
       <Form.Item label="Assumptions" name="assumptions">
-        <TextArea rows={3} placeholder="Assumptions / constraints..." />
+        <TextArea rows={3} placeholder="Assumptions / constraints..." disabled={isLocked} />
       </Form.Item>
 
       <Divider orientation="left">Quote Details</Divider>
@@ -186,6 +205,7 @@ export default function QuoteForm({
               style={{ width: "100%" }}
               min={0}
               placeholder="Enter quote value"
+              disabled={isLocked}
             />
           </Form.Item>
         </Col>
@@ -196,7 +216,7 @@ export default function QuoteForm({
             name="validUntil"
             rules={[{ required: true, message: "Validity date is required" }]}
           >
-            <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
+            <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" disabled={isLocked} />
           </Form.Item>
         </Col>
 
@@ -209,18 +229,21 @@ export default function QuoteForm({
             <Select
               placeholder="Select status"
               options={STATUS.map((s) => ({ value: s, label: s }))}
+              disabled={isLocked}
             />
           </Form.Item>
         </Col>
       </Row>
 
       <Divider />
-      <Space>
-        <Button type="primary" htmlType="submit" loading={loading}>
-          Save Quote
-        </Button>
-        <Button onClick={onCancel}>Cancel</Button>
-      </Space>
+      {!isLocked && (
+        <Space>
+          <Button type="primary" htmlType="submit" loading={loading}>
+            Save Quote (v{(initialValues?.version || 0) + 1})
+          </Button>
+          <Button onClick={onCancel}>Cancel</Button>
+        </Space>
+      )}
     </Form>
   );
 }

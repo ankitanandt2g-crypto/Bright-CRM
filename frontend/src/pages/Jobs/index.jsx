@@ -7,49 +7,16 @@ import { useJob } from "../../context/JobContext";
 
 const { Option } = Select;
 
-const STAGES = [
-  "Backlog",
-  "Site Measurement",
-  "Planning Lock",
-  "Drafting",
-  "Job Scheduling",
-  "Material Purchase",
-  "Fabrication",
-  "Quality Control",
-  "Installation",
-  "Closure",
-];
+const SYSTEM_STATES = ["New", "Active", "Completed", "Closed"];
 
-const STATUSES = ["Backlog", "Active", "On Hold", "Completed"];
-
-const STAGE_COLORS = {
-  Backlog: "default",
-  "Site Measurement": "blue",
-  "Planning Lock": "purple",
-  Drafting: "orange",
-  "Job Scheduling": "gold",
-  "Material Purchase": "lime",
-  Fabrication: "cyan",
-  "Quality Control": "magenta",
-  Installation: "green",
-  Closure: "volcano",
+const STATE_COLORS = {
+  New: "blue",
+  Active: "orange",
+  Completed: "green",
+  Closed: "default",
 };
 
-const STATUS_COLORS = {
-  Backlog: "default",
-  Active: "green",
-  "On Hold": "orange",
-  Completed: "red",
-};
 
-const genJobId = () => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `J-${y}${m}${day}-${rand}`;
-};
 
 export default function Jobs() {
   const [jobs, setJobs] = useState([]);
@@ -58,30 +25,12 @@ export default function Jobs() {
   const [open, setOpen] = useState(false);
   const [editData, setEditData] = useState(null);
 
-  const [stageFilter, setStageFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [stateFilter, setStateFilter] = useState("All");
 
   const { setActiveJobId } = useJob();
   const navigate = useNavigate();
 
-  const getStageIndex = (stage) => STAGES.indexOf(stage);
 
-  const hasReachedStage = (record, stageName) => {
-    const currentIndex = getStageIndex(record?.stage);
-    const targetIndex = getStageIndex(stageName);
-
-    if (currentIndex === -1 || targetIndex === -1) return false;
-    return currentIndex >= targetIndex;
-  };
-
-  const isDraftingComplete = (record) => {
-    return (
-      record?.draftingCompleted === true ||
-      record?.ifcApproved === true ||
-      record?.ifcStatus === "Approved" ||
-      hasReachedStage(record, "Job Scheduling")
-    );
-  };
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -101,51 +50,7 @@ export default function Jobs() {
     fetchJobs();
   }, []);
 
-  const handleSubmit = async (values) => {
-    try {
-      const payload = {
-        ...values,
-        jobId: values.jobId || genJobId(),
-        customer: values.customer || "",
-        site: values.site || "",
-        stage: values.stage || "Backlog",
-        status: values.status || "Backlog",
-      };
 
-      await createJob(payload);
-      message.success("Job created");
-      setOpen(false);
-      setEditData(null);
-      await fetchJobs();
-    } catch (err) {
-      message.error(
-        err?.response?.data?.message || err?.message || "Failed to create job"
-      );
-    }
-  };
-
-  const handleDelete = async (id) => {
-    try {
-      await deleteJob(id);
-      message.success("Job deleted");
-      await fetchJobs();
-    } catch (err) {
-      message.error(
-        err?.response?.data?.message || err?.message || "Delete failed"
-      );
-    }
-  };
-
-  const handleJobChange = async (id, payload) => {
-    try {
-      await updateJob(id, payload);
-      await fetchJobs();
-    } catch (err) {
-      message.error(
-        err?.response?.data?.message || err?.message || "Update failed"
-      );
-    }
-  };
 
   const setJobContext = (job) => {
     const jobObjectId = job?._id;
@@ -168,40 +73,13 @@ export default function Jobs() {
     navigate(route, { state: { job } });
   };
 
-  const openSiteMeasurement = (job) => {
-    const ok = setJobContext(job);
-    if (!ok) return;
 
-    navigate(`/admin/site-measurement?jobId=${job._id}`, {
-      state: { job },
-    });
-  };
-
-  const openPlanning = (job) => {
-    const ok = setJobContext(job);
-    if (!ok) return;
-
-    navigate(`/admin/planning?jobId=${job._id}`, {
-      state: { job },
-    });
-  };
-
-  const openDrafting = (job) => {
-    const ok = setJobContext(job);
-    if (!ok) return;
-
-    navigate(`/admin/drafting?jobId=${job._id}`, {
-      state: { job },
-    });
-  };
 
   const filteredJobs = useMemo(() => {
     return jobs.filter((j) => {
-      const stageOk = stageFilter === "All" || j.stage === stageFilter;
-      const statusOk = statusFilter === "All" || j.status === statusFilter;
-      return stageOk && statusOk;
+      return stateFilter === "All" || j.systemState === stateFilter;
     });
-  }, [jobs, stageFilter, statusFilter]);
+  }, [jobs, stateFilter]);
 
   const columns = [
     {
@@ -222,114 +100,32 @@ export default function Jobs() {
       width: 220,
     },
     {
-      title: "Stage",
-      dataIndex: "stage",
-      width: 220,
-      render: (_, record) => (
-        <Select
-          value={record.stage}
-          style={{ width: 210 }}
-          onChange={(v) => handleJobChange(record._id, { stage: v })}
-        >
-          {STAGES.map((s) => (
-            <Option key={s} value={s}>
-              <Tag color={STAGE_COLORS[s]}>{s}</Tag>
-            </Option>
-          ))}
-        </Select>
-      ),
+      title: "State",
+      dataIndex: "systemState",
+      width: 150,
+      render: (v) => <Tag color={STATE_COLORS[v] || "default"}>{v || "New"}</Tag>,
     },
     {
-      title: "Status",
-      dataIndex: "status",
-      width: 160,
-      render: (_, record) => (
-        <Select
-          value={record.status}
-          style={{ width: 145 }}
-          onChange={(v) => handleJobChange(record._id, { status: v })}
-        >
-          {STATUSES.map((s) => (
-            <Option key={s} value={s}>
-              <Tag color={STATUS_COLORS[s]}>{s}</Tag>
-            </Option>
-          ))}
-        </Select>
-      ),
+      title: "Value",
+      dataIndex: "lockedValue",
+      width: 150,
+      render: (v) => v ? `$${v.toFixed(2)}` : "-",
     },
     {
-      title: "Modules",
-      width: 760,
+      title: "Actions",
+      width: 200,
       render: (_, record) => {
-        const planningOpen = hasReachedStage(record, "Site Measurement");
-        const draftingOpen = hasReachedStage(record, "Drafting");
-        const afterDraftingOpen = isDraftingComplete(record);
-
         return (
-          <div style={{ maxWidth: 520 }}>
-            <Space wrap size={[8, 8]}>
-              <Button size="small" onClick={() => openSiteMeasurement(record)}>
-                Site Measurement
+          <Space>
+            <Button type="primary" size="small" onClick={() => navigate(`/admin/job/${record._id}`)}>
+              View Timeline
+            </Button>
+            <Popconfirm title="Archive/Delete Job?" onConfirm={() => handleDelete(record._id)}>
+              <Button danger size="small">
+                Archive
               </Button>
-
-              <Button
-                size="small"
-                disabled={!planningOpen}
-                onClick={() => openPlanning(record)}
-              >
-                Planning
-              </Button>
-
-              <Button
-                size="small"
-                disabled={!draftingOpen}
-                onClick={() => openDrafting(record)}
-              >
-                Drafting
-              </Button>
-
-              <Button
-                size="small"
-                disabled={!afterDraftingOpen}
-                onClick={() => openJob(record, "/admin/kanban")}
-              >
-                Scheduling
-              </Button>
-
-              <Button
-                size="small"
-                disabled={!afterDraftingOpen}
-                onClick={() => openJob(record, "/admin/material-purchase")}
-              >
-                Material
-              </Button>
-
-              <Button
-                size="small"
-                disabled={!afterDraftingOpen}
-                onClick={() => openJob(record, "/admin/fabrication")}
-              >
-                Fabrication
-              </Button>
-
-              <Button
-                size="small"
-                disabled={!afterDraftingOpen}
-                onClick={() => openJob(record, "/admin/qc")}
-              >
-                QC
-              </Button>
-
-              <Popconfirm
-                title="Delete job?"
-                onConfirm={() => handleDelete(record._id)}
-              >
-                <Button danger size="small">
-                  Delete
-                </Button>
-              </Popconfirm>
-            </Space>
-          </div>
+            </Popconfirm>
+          </Space>
         );
       },
     },
@@ -349,49 +145,24 @@ export default function Jobs() {
         }}
       >
         <Select
-          value={stageFilter}
-          style={{ width: 240 }}
-          onChange={setStageFilter}
-        >
-          <Option value="All">All Stages</Option>
-          {STAGES.map((s) => (
-            <Option key={s} value={s}>
-              <Tag color={STAGE_COLORS[s]}>{s}</Tag>
-            </Option>
-          ))}
-        </Select>
-
-        <Select
-          value={statusFilter}
+          value={stateFilter}
           style={{ width: 170 }}
-          onChange={setStatusFilter}
+          onChange={setStateFilter}
         >
-          <Option value="All">All Status</Option>
-          {STATUSES.map((s) => (
+          <Option value="All">All States</Option>
+          {SYSTEM_STATES.map((s) => (
             <Option key={s} value={s}>
-              <Tag color={STATUS_COLORS[s]}>{s}</Tag>
+              <Tag color={STATE_COLORS[s]}>{s}</Tag>
             </Option>
           ))}
         </Select>
 
         <Button
           onClick={() => {
-            setStageFilter("All");
-            setStatusFilter("All");
+            setStateFilter("All");
           }}
         >
           Reset
-        </Button>
-
-        <Button
-          type="primary"
-          style={{ marginLeft: "auto" }}
-          onClick={() => {
-            setEditData(null);
-            setOpen(true);
-          }}
-        >
-          + Create Job
         </Button>
       </div>
 
@@ -401,14 +172,7 @@ export default function Jobs() {
         rowKey="_id"
         loading={loading}
         pagination={{ pageSize: 10 }}
-        scroll={{ x: 1700 }}
-      />
-
-      <JobForm
-        open={open}
-        onCancel={() => setOpen(false)}
-        onSubmit={handleSubmit}
-        initialValues={editData}
+        scroll={{ x: 1000 }}
       />
     </div>
   );

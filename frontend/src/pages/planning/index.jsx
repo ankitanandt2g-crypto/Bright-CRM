@@ -78,8 +78,7 @@ export default function Planning() {
   // ✅ only planning-eligible jobs
   const eligibleJobs = useMemo(() => {
     return jobs.filter(
-      (job) =>
-        job.stage === "Site Measurement" || job.stage === "Planning Lock"
+      (job) => job?.workflowEvents?.siteMeasurement?.isCompleted
     );
   }, [jobs]);
 
@@ -184,11 +183,7 @@ export default function Planning() {
         return;
       }
 
-      // ✅ block non-eligible jobs from opening in planning
-      if (
-        job.stage !== "Site Measurement" &&
-        job.stage !== "Planning Lock"
-      ) {
+      if (!job?.workflowEvents?.siteMeasurement?.isCompleted) {
         message.warning(
           "This job is not eligible for Planning. Complete Site Measurement first."
         );
@@ -325,9 +320,23 @@ export default function Planning() {
     try {
       setCompleting(true);
 
+      const planningUpdate = {
+        isCompleted: true,
+        approvalDate: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        completedBy: "Planning Module",
+      };
+
       await updateJob(jobId, {
         stage: "Drafting",
         status: "Active",
+        workflowEvents: {
+          ...jobData?.workflowEvents,
+          planning: {
+            ...jobData?.workflowEvents?.planning,
+            ...planningUpdate,
+          },
+        },
       });
 
       if (jobData) {
@@ -335,6 +344,13 @@ export default function Planning() {
           ...jobData,
           stage: "Drafting",
           status: "Active",
+          workflowEvents: {
+            ...jobData.workflowEvents,
+            planning: {
+              ...jobData.workflowEvents?.planning,
+              ...planningUpdate,
+            },
+          },
         };
         setCurrentJobContext(updatedJobData);
       }
@@ -354,8 +370,8 @@ export default function Planning() {
     { title: "Task", dataIndex: "task" },
     { title: "Start", dataIndex: "start" },
     { title: "End", dataIndex: "end" },
-    { title: "Workers", dataIndex: "workers" },
-    { title: "Hours", dataIndex: "hours" },
+    { title: "Estimated employee requirement", dataIndex: "workers" },
+    { title: "Estimated Hour requirement", dataIndex: "hours" },
     {
       title: "Status",
       dataIndex: "status",
@@ -411,7 +427,7 @@ export default function Planning() {
         <div>
           <h2 style={{ margin: 0 }}>Planning (Admin)</h2>
           <div style={{ color: "#666", marginTop: 4 }}>
-            Only site measurement completed jobs are available here.
+            Only jobs with completed Site Measurement are available here.
           </div>
         </div>
 
@@ -560,7 +576,7 @@ export default function Planning() {
 
           <Form.Item
             name="workers"
-            label="Workers"
+            label="Estimated employee requirement"
             rules={[{ required: true, message: "Workers required" }]}
           >
             <InputNumber min={1} style={{ width: "100%" }} />
@@ -568,7 +584,7 @@ export default function Planning() {
 
           <Form.Item
             name="hours"
-            label="Hours"
+            label="Estimated Hour requirement"
             rules={[{ required: true, message: "Hours required" }]}
           >
             <InputNumber min={1} style={{ width: "100%" }} />

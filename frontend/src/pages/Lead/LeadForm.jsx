@@ -55,37 +55,28 @@ export default function LeadForm({ open, onCancel, onSubmit, initialValues }) {
 
         <Form.Item
           name="siteAddress"
-          label="Site Address"
-          rules={[{ required: true, message: 'Site address is required' }]}
+          label="Job Location (Suburb/Postcode)"
+          rules={[{ required: true, message: 'Job location is required' }]}
         >
-          <Input.TextArea rows={2} placeholder="Enter site address" />
+          <Input.TextArea rows={2} placeholder="Enter job location" />
         </Form.Item>
 
         <Form.Item
-          name="projectType"
-          label="Project Type"
-          rules={[{ required: true, message: 'Project type is required' }]}
+          name="category"
+          label="Category"
+          rules={[{ required: true, message: 'Category is required' }]}
         >
-          <Select placeholder="Select project type">
+          <Select placeholder="Select category">
             <Option value="Residential">Residential</Option>
             <Option value="Commercial">Commercial</Option>
-            <Option value="Industrial">Industrial</Option>
-            <Option value="Other">Other</Option>
           </Select>
         </Form.Item>
 
         <Form.Item
-          name="balustradeType"
-          label="Balustrade Type"
-          rules={[{ required: true, message: 'Balustrade type is required' }]}
+          name="assignedSalesperson"
+          label="Assigned Salesperson"
         >
-          <Select placeholder="Select balustrade type">
-            <Option value="Glass">Glass</Option>
-            <Option value="Stainless Steel">Stainless Steel</Option>
-            <Option value="Aluminium">Aluminium</Option>
-            <Option value="Wood">Wood</Option>
-            <Option value="Other">Other</Option>
-          </Select>
+          <Input placeholder="Enter salesperson name" />
         </Form.Item>
 
         <Form.Item
@@ -94,20 +85,19 @@ export default function LeadForm({ open, onCancel, onSubmit, initialValues }) {
           rules={[{ required: true, message: 'Lead source is required' }]}
         >
           <Select>
+            <Option value="Website">Website</Option>
+            <Option value="Phone Call">Phone Call</Option>
+            <Option value="Social Media">Social Media</Option>
+            <Option value="Google">Google</Option>
             <Option value="Manual Entry">Manual Entry</Option>
-            <Option value="Website Enquiries">Website Enquiries</Option>
-            <Option value="Phone Calls">Phone Calls</Option>
-            <Option value="Referrals">Referrals</Option>
           </Select>
         </Form.Item>
 
-        {/* Optional */}
         <Form.Item name="status" label="Status">
           <Select>
             <Option value="New">New</Option>
             <Option value="Contacted">Contacted</Option>
-            <Option value="Qualified">Qualified</Option>
-            <Option value="Converted">Converted</Option>
+            <Option value="Quoted">Quoted</Option>
             <Option value="Lost">Lost</Option>
           </Select>
         </Form.Item>

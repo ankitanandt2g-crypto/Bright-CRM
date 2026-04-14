@@ -1,53 +1,48 @@
 const mongoose = require("mongoose");
+const Installation = require("../models/appModels/Installation");
+const InstallationSummary = require("../models/appModels/InstallationSummary");
+const Job = require("../models/appModels/Job");
 
-const Installation =
-    mongoose.models.Installation || mongoose.model("Installation");
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
-let Job = null;
-try {
-    Job = mongoose.models.Job || mongoose.model("Job");
-} catch (err) {
-    console.warn("Job model not loaded yet.");
-}
-
-const normalizePayload = (body = {}) => {
-    let assignedTeam = body.assignedTeam || [];
-
-    if (typeof assignedTeam === "string") {
-        try {
-            assignedTeam = JSON.parse(assignedTeam);
-        } catch (e) {
-            assignedTeam = assignedTeam ? [assignedTeam] : [];
-        }
-    }
-
-    if (!Array.isArray(assignedTeam)) {
-        assignedTeam = [];
-    }
-
-    return {
-        jobId: body.jobId,
-        activityName: body.activityName,
-        locationArea: body.locationArea || "",
-        assignedTeam,
-        plannedDate: body.plannedDate || "",
-        completedDate: body.completedDate || "",
-        status: body.status || "Pending",
-        snagIssue: body.snagIssue || "",
-        remarks: body.remarks || "",
-    };
+const toNumber = (value, fallback = 0) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
 };
+
+const toDateOrNull = (value) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const mapFile = (file) => ({
+    originalName: file.originalname || "",
+    filename: file.filename || "",
+    path: file.path || "",
+    mimetype: file.mimetype || "",
+    size: file.size || 0,
+});
 
 exports.listByJob = async (req, res) => {
     try {
         const { jobId } = req.params;
 
-        const result = await Installation.find({ jobId })
-            .sort({ createdAt: -1 });
+        if (!isValidObjectId(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid jobId",
+            });
+        }
+
+        const items = await Installation.find({ jobId }).sort({
+            plannedDate: 1,
+            createdAt: -1,
+        });
 
         return res.status(200).json({
             success: true,
-            result,
+            result: items,
         });
     } catch (error) {
         console.error("Installation listByJob error:", error);
@@ -59,81 +54,68 @@ exports.listByJob = async (req, res) => {
     }
 };
 
-exports.read = async (req, res) => {
-    try {
-        const result = await Installation.findById(req.params.id);
-
-        if (!result) {
-            return res.status(404).json({
-                success: false,
-                message: "Installation item not found",
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            result,
-        });
-    } catch (error) {
-        console.error("Installation read error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Failed to read installation item",
-            error: error.message,
-        });
-    }
-};
-
 exports.create = async (req, res) => {
     try {
-        const payload = normalizePayload(req.body);
+        const {
+            jobId,
+            activityName,
+            locationArea,
+            assignedTeam,
+            plannedDate,
+            completedDate,
+            status,
+            snagIssue,
+            remarks,
+            expectedHours,
+            actualHours,
+        } = req.body;
 
-        if (!payload.jobId) {
+        if (!isValidObjectId(jobId)) {
             return res.status(400).json({
                 success: false,
-                message: "jobId is required",
+                message: "Invalid jobId",
             });
         }
 
-        if (!payload.activityName) {
+        if (!activityName?.trim()) {
             return res.status(400).json({
                 success: false,
-                message: "activityName is required",
+                message: "Activity name is required",
             });
         }
 
-        if (Job) {
-            const job = await Job.findById(payload.jobId);
-            if (!job) {
-                return res.status(404).json({
-                    success: false,
-                    message: "Job not found",
-                });
-            }
-
-            if (!["Installation", "Closure"].includes(job.stage)) {
-                job.stage = "Installation";
-            }
-
-            if (job.status !== "Active" && job.status !== "Completed") {
-                job.status = "Active";
-            }
-
-            await job.save();
+        const job = await Job.findById(jobId);
+        if (!job) {
+            return res.status(404).json({
+                success: false,
+                message: "Job not found",
+            });
         }
 
-        const result = await Installation.create(payload);
+        const item = await Installation.create({
+            jobId,
+            activityName: activityName.trim(),
+            locationArea: locationArea || "",
+            assignedTeam: Array.isArray(assignedTeam) ? assignedTeam : [],
+            plannedDate: toDateOrNull(plannedDate),
+            completedDate: toDateOrNull(completedDate),
+            status: status || "Pending",
+            snagIssue: snagIssue || "",
+            remarks: remarks || "",
+            expectedHours: toNumber(expectedHours),
+            actualHours: toNumber(actualHours),
+        });
 
         return res.status(201).json({
             success: true,
-            message: "Installation item created successfully",
-            result,
+            result: item,
+            message: "Installation activity created successfully",
         });
     } catch (error) {
         console.error("Installation create error:", error);
         return res.status(500).json({
             success: false,
-            message: "Failed to create installation item",
+            message: "Failed to create installation activity",
             error: error.message,
         });
     }
@@ -141,123 +123,393 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
     try {
-        const existing = await Installation.findById(req.params.id);
+        const { id } = req.params;
 
-        if (!existing) {
-            return res.status(404).json({
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({
                 success: false,
-                message: "Installation item not found",
+                message: "Invalid installation item id",
             });
         }
 
-        const payload = normalizePayload(req.body);
+        const payload = {
+            ...(req.body.activityName !== undefined && {
+                activityName: String(req.body.activityName || "").trim(),
+            }),
+            ...(req.body.locationArea !== undefined && {
+                locationArea: req.body.locationArea || "",
+            }),
+            ...(req.body.assignedTeam !== undefined && {
+                assignedTeam: Array.isArray(req.body.assignedTeam)
+                    ? req.body.assignedTeam
+                    : [],
+            }),
+            ...(req.body.plannedDate !== undefined && {
+                plannedDate: toDateOrNull(req.body.plannedDate),
+            }),
+            ...(req.body.completedDate !== undefined && {
+                completedDate: toDateOrNull(req.body.completedDate),
+            }),
+            ...(req.body.status !== undefined && {
+                status: req.body.status || "Pending",
+            }),
+            ...(req.body.snagIssue !== undefined && {
+                snagIssue: req.body.snagIssue || "",
+            }),
+            ...(req.body.remarks !== undefined && {
+                remarks: req.body.remarks || "",
+            }),
+            ...(req.body.expectedHours !== undefined && {
+                expectedHours: toNumber(req.body.expectedHours),
+            }),
+            ...(req.body.actualHours !== undefined && {
+                actualHours: toNumber(req.body.actualHours),
+            }),
+        };
 
-        if (!payload.jobId) {
-            payload.jobId = existing.jobId;
-        }
+        const updated = await Installation.findByIdAndUpdate(id, payload, {
+            new: true,
+            runValidators: true,
+        });
 
-        const result = await Installation.findByIdAndUpdate(
-            req.params.id,
-            { $set: payload },
-            { new: true, runValidators: true }
-        );
-
-        if (Job && payload.jobId) {
-            const job = await Job.findById(payload.jobId);
-            if (job) {
-                job.stage = "Installation";
-                if (job.status !== "Completed") {
-                    job.status = "Active";
-                }
-                await job.save();
-            }
+        if (!updated) {
+            return res.status(404).json({
+                success: false,
+                message: "Installation activity not found",
+            });
         }
 
         return res.status(200).json({
             success: true,
-            message: "Installation item updated successfully",
-            result,
+            result: updated,
+            message: "Installation activity updated successfully",
         });
     } catch (error) {
         console.error("Installation update error:", error);
         return res.status(500).json({
             success: false,
-            message: "Failed to update installation item",
+            message: "Failed to update installation activity",
             error: error.message,
         });
     }
 };
 
-exports.delete = async (req, res) => {
+exports.remove = async (req, res) => {
     try {
-        const result = await Installation.findByIdAndDelete(req.params.id);
+        const { id } = req.params;
 
-        if (!result) {
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid installation item id",
+            });
+        }
+
+        const deleted = await Installation.findByIdAndDelete(id);
+
+        if (!deleted) {
             return res.status(404).json({
                 success: false,
-                message: "Installation item not found",
+                message: "Installation activity not found",
             });
         }
 
         return res.status(200).json({
             success: true,
-            message: "Installation item deleted successfully",
+            result: deleted,
+            message: "Installation activity deleted successfully",
         });
     } catch (error) {
         console.error("Installation delete error:", error);
         return res.status(500).json({
             success: false,
-            message: "Failed to delete installation item",
+            message: "Failed to delete installation activity",
             error: error.message,
         });
     }
 };
 
-exports.completeInstallation = async (req, res) => {
+exports.getSummary = async (req, res) => {
     try {
         const { jobId } = req.params;
+
+        if (!isValidObjectId(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid jobId",
+            });
+        }
+
+        let summary = await InstallationSummary.findOne({ jobId });
+
+        if (!summary) {
+            summary = await InstallationSummary.create({ jobId });
+        }
+
+        return res.status(200).json({
+            success: true,
+            result: summary,
+        });
+    } catch (error) {
+        console.error("Installation getSummary error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch installation summary",
+            error: error.message,
+        });
+    }
+};
+
+exports.saveSummary = async (req, res) => {
+    try {
+        const { jobId } = req.params;
+
+        if (!isValidObjectId(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid jobId",
+            });
+        }
+
+        const payload = {
+            ...(req.body.installationScheduledDate !== undefined && {
+                installationScheduledDate: toDateOrNull(
+                    req.body.installationScheduledDate
+                ),
+            }),
+            ...(req.body.assignedTeam !== undefined && {
+                assignedTeam: Array.isArray(req.body.assignedTeam)
+                    ? req.body.assignedTeam
+                    : [],
+            }),
+            ...(req.body.expectedHours !== undefined && {
+                expectedHours: toNumber(req.body.expectedHours),
+            }),
+            ...(req.body.actualHours !== undefined && {
+                actualHours: toNumber(req.body.actualHours),
+            }),
+            ...(req.body.completionConfirmed !== undefined && {
+                completionConfirmed:
+                    req.body.completionConfirmed === true ||
+                    req.body.completionConfirmed === "true",
+            }),
+            ...(req.body.completionConfirmedAt !== undefined && {
+                completionConfirmedAt: toDateOrNull(req.body.completionConfirmedAt),
+            }),
+            ...(req.body.completionRemarks !== undefined && {
+                completionRemarks: req.body.completionRemarks || "",
+            }),
+        };
+
+        const summary = await InstallationSummary.findOneAndUpdate(
+            { jobId },
+            { $set: payload },
+            {
+                new: true,
+                upsert: true,
+                runValidators: true,
+            }
+        );
+
+        await Job.findByIdAndUpdate(jobId, {
+            stage: "Installation",
+            status: "Active",
+        });
+
+        return res.status(200).json({
+            success: true,
+            result: summary,
+            message: "Installation summary saved successfully",
+        });
+    } catch (error) {
+        console.error("Installation saveSummary error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to save installation summary",
+            error: error.message,
+        });
+    }
+};
+
+exports.markComplete = async (req, res) => {
+    try {
+        const { jobId } = req.params;
+
+        if (!isValidObjectId(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid jobId",
+            });
+        }
 
         const items = await Installation.find({ jobId });
 
         if (!items.length) {
             return res.status(400).json({
                 success: false,
-                message: "No installation items found for this job",
+                message: "No installation activities found",
             });
         }
 
-        const incomplete = items.filter((item) => item.status !== "Completed");
-        if (incomplete.length > 0) {
+        const allCompleted = items.every((item) => item.status === "Completed");
+
+        if (!allCompleted) {
             return res.status(400).json({
                 success: false,
                 message:
-                    "All installation items must be Completed before marking installation complete",
+                    "All installation activities must be Completed before confirmation",
             });
         }
 
-        if (Job) {
-            const job = await Job.findById(jobId);
-            if (!job) {
-                return res.status(404).json({
-                    success: false,
-                    message: "Job not found",
-                });
-            }
+        const summary = await InstallationSummary.findOneAndUpdate(
+            { jobId },
+            {
+                $set: {
+                    completionConfirmed: true,
+                    completionConfirmedAt: new Date(),
+                },
+            },
+            { new: true, upsert: true }
+        );
 
-            job.stage = "Closure";
-            job.status = "Completed";
-            await job.save();
-        }
+        await Job.findByIdAndUpdate(jobId, {
+            $set: {
+                "workflowEvents.installation.isCompleted": true,
+                "workflowEvents.installation.completedAt": new Date(),
+                "workflowEvents.installation.completedBy": "Installation Module",
+            },
+        });
 
         return res.status(200).json({
             success: true,
-            message: "Installation marked complete. Job moved to Closure",
+            result: summary,
+            message: "Installation completion confirmed successfully",
         });
     } catch (error) {
-        console.error("Installation complete error:", error);
+        console.error("Installation markComplete error:", error);
         return res.status(500).json({
             success: false,
-            message: "Failed to mark installation complete",
+            message: "Failed to confirm installation completion",
+            error: error.message,
+        });
+    }
+};
+
+exports.finalize = async (req, res) => {
+    try {
+        const { jobId } = req.params;
+
+        if (!isValidObjectId(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid jobId",
+            });
+        }
+
+        const {
+            customerName,
+            customerSignOffDone,
+            completionDate,
+            completionRemarks,
+        } = req.body;
+
+        const signOff =
+            customerSignOffDone === true || customerSignOffDone === "true";
+
+        if (!signOff) {
+            return res.status(400).json({
+                success: false,
+                message: "Customer sign-off is required",
+            });
+        }
+
+        if (!completionDate) {
+            return res.status(400).json({
+                success: false,
+                message: "Completion date is required",
+            });
+        }
+
+        const allItems = await Installation.find({ jobId });
+
+        if (!allItems.length) {
+            return res.status(400).json({
+                success: false,
+                message: "No installation activities found",
+            });
+        }
+
+        const allCompleted = allItems.every((item) => item.status === "Completed");
+
+        if (!allCompleted) {
+            return res.status(400).json({
+                success: false,
+                message: "All installation activities must be completed before closure",
+            });
+        }
+
+        const signatureFile =
+            req.files?.customerSignatureFile?.[0] || null;
+        const pictureFiles = Array.isArray(req.files?.completionPictures)
+            ? req.files.completionPictures
+            : [];
+        const documentFiles = Array.isArray(req.files?.completionDocuments)
+            ? req.files.completionDocuments
+            : [];
+
+        if (!pictureFiles.length) {
+            return res.status(400).json({
+                success: false,
+                message: "At least one completion picture is required",
+            });
+        }
+
+        const summary = await InstallationSummary.findOneAndUpdate(
+            { jobId },
+            {
+                $set: {
+                    customerName: customerName || "",
+                    customerSignOffDone: true,
+                    completionDate: toDateOrNull(completionDate),
+                    completionRemarks: completionRemarks || "",
+                    completionConfirmed: true,
+                    completionConfirmedAt: new Date(),
+                    ...(signatureFile && {
+                        customerSignatureFile: mapFile(signatureFile),
+                    }),
+                    completionPictures: pictureFiles.map(mapFile),
+                    completionDocuments: documentFiles.map(mapFile),
+                },
+            },
+            {
+                new: true,
+                upsert: true,
+                runValidators: true,
+            }
+        );
+
+        await Job.findByIdAndUpdate(jobId, {
+            stage: "Closure",
+            status: "Completed",
+            $set: {
+                "workflowEvents.installation.isCompleted": true,
+                "workflowEvents.jobCompletion.isCompleted": true,
+                "workflowEvents.jobCompletion.completedAt": new Date(),
+                "workflowEvents.jobCompletion.completedBy": "Installation Module",
+                "workflowEvents.jobCompletion.completionDate": toDateOrNull(completionDate),
+            },
+        });
+
+        return res.status(200).json({
+            success: true,
+            result: summary,
+            message: "Job finalized and moved to Closure successfully",
+        });
+    } catch (error) {
+        console.error("Installation finalize error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to finalize job completion",
             error: error.message,
         });
     }

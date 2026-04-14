@@ -23,6 +23,10 @@ const adminSchema = new Schema({
     type: String,
     trim: true,
   },
+  phone: {
+    type: String,
+    trim: true,
+  },
   created: {
     type: Date,
     default: Date.now,

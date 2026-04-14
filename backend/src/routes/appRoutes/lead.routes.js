@@ -12,10 +12,14 @@ if (!leadController?.deleteLead) console.log("❌ deleteLead missing from lead.c
 if (!leadController?.createJobFromLead) console.log("❌ createJobFromLead missing from lead.controller.js");
 
 // Routes
+router.get("/read/:id", leadController.readLead);
 router.get("/list", leadController.listLeads);
 router.post("/create", leadController.createLead);
 router.patch("/update/:id", leadController.updateLead); // ✅ PATCH
 router.delete("/delete/:id", leadController.deleteLead);
+
+// ✅ Add Lead Interaction
+router.post("/:id/interaction", leadController.addInteraction);
 
 // ✅ Convert Lead -> Job + Customer create/link
 router.post("/convert-to-job/:id", leadController.createJobFromLead);

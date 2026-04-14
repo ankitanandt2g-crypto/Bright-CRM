@@ -73,6 +73,34 @@ export default function MeasurementForm({
         </Form.Item>
 
         <Form.Item
+          label="Water Location"
+          name="waterLocation"
+        >
+          <Input placeholder="Describe water location" />
+        </Form.Item>
+
+        <Form.Item
+          label="Power Location"
+          name="powerLocation"
+        >
+          <Input placeholder="Describe power location" />
+        </Form.Item>
+
+        <Form.Item
+          label="Lift Access"
+          name="liftAccess"
+        >
+          <Input placeholder="Describe lift access" />
+        </Form.Item>
+
+        <Form.Item
+          label="Washroom Access"
+          name="washroomAccess"
+        >
+          <Input placeholder="Describe washroom access" />
+        </Form.Item>
+
+        <Form.Item
           label="Notes"
           name="notes"
         >

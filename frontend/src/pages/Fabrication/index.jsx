@@ -136,8 +136,10 @@ export default function Fabrication() {
   const jobKey = jobId ? `activeJobData_${jobId}` : null;
 
   const eligibleJobs = useMemo(() => {
-    return jobs.filter((job) =>
-      ["Job Scheduling", "Material Purchase", "Fabrication"].includes(job.stage)
+    return jobs.filter(
+      (job) =>
+        job?.workflowEvents?.drafting?.isCompleted &&
+        job?.workflowEvents?.materialPurchasing?.isCompleted
     );
   }, [jobs]);
 
@@ -266,10 +268,8 @@ export default function Fabrication() {
 
       const approved = draftList.some(
         (item) =>
-          item?.ifc === "IFC Approved" ||
-          item?.ifc === "Approved" ||
-          item?.ifcStatus === "Approved" ||
-          item?.status === "IFC Approved"
+          item?.status === "IFC Approved" ||
+          item?.isIFCApproved === true
       );
 
       setIfcApproved(approved);
@@ -305,8 +305,20 @@ export default function Fabrication() {
         return;
       }
 
-      if (!["Job Scheduling", "Material Purchase", "Fabrication"].includes(job.stage)) {
-        message.warning("This job is not eligible for Fabrication.");
+      if (!job?.workflowEvents?.drafting?.isCompleted) {
+        message.warning("This job is not eligible for Fabrication. Complete Drafting first.");
+        setJobData(null);
+        setItems([]);
+        setDraftingItems([]);
+        setIfcApproved(false);
+        navigate("/admin/fabrication");
+        return;
+      }
+
+      if (!job?.workflowEvents?.materialPurchasing?.isCompleted) {
+        message.warning(
+          "This job is not eligible for Fabrication. Complete Material Purchase first."
+        );
         setJobData(null);
         setItems([]);
         setDraftingItems([]);
@@ -594,10 +606,21 @@ export default function Fabrication() {
     try {
       setCompleting(true);
 
+      const fabricationEvent = {
+        ...(jobData?.workflowEvents?.fabrication || {}),
+        isCompleted: true,
+        completedAt: new Date().toISOString(),
+        completedBy: "Fabrication Module",
+      };
+
       await updateJob(jobId, {
         stage: "Quality Control",
         status: "Active",
         fabricationSignOff: true,
+        workflowEvents: {
+          ...jobData?.workflowEvents,
+          fabrication: fabricationEvent,
+        },
       });
 
       if (jobData) {
@@ -606,6 +629,10 @@ export default function Fabrication() {
           stage: "Quality Control",
           status: "Active",
           fabricationSignOff: true,
+          workflowEvents: {
+            ...jobData.workflowEvents,
+            fabrication: fabricationEvent,
+          },
         };
         setCurrentJobContext(updatedJobData);
       }
@@ -742,7 +769,7 @@ export default function Fabrication() {
         <div>
           <h2 style={{ margin: 0 }}>Fabrication</h2>
           <div style={{ color: "#666", marginTop: 4 }}>
-            Jobs from scheduling, material purchase, and fabrication stages are available here.
+            Only jobs with completed Material Purchasing are available here.
           </div>
         </div>
 

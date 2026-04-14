@@ -20,21 +20,10 @@ export default function Payment({ config, currentItem }) {
   const [currentErp, setCurrentErp] = useState(currentItem);
 
   useEffect(() => {
-    const controller = new AbortController();
     if (currentItem) {
-      const { invoice, _id, ...others } = currentItem;
-      setCurrentErp({ ...others, ...invoice, _id });
+      setCurrentErp(currentItem);
     }
-    return () => controller.abort();
   }, [currentItem]);
-
-  const [client, setClient] = useState({});
-
-  useEffect(() => {
-    if (currentErp?.client) {
-      setClient(currentErp.client);
-    }
-  }, [currentErp]);
 
   return (
     <>
@@ -48,10 +37,8 @@ export default function Payment({ config, currentItem }) {
         >
           <PageHeader
             onBack={() => navigate(`/${entity.toLowerCase()}`)}
-            title={`Update  ${ENTITY_NAME} # ${currentErp.number}/${currentErp.year || ''}`}
+            title={`Update  ${ENTITY_NAME} # ${currentErp.number}`}
             ghost={false}
-            tags={<span>{currentErp.paymentStatus}</span>}
-            // subTitle="This is cuurent erp page"
             extra={[
               <Button
                 key={`${uniqueId()}`}
@@ -64,7 +51,7 @@ export default function Payment({ config, currentItem }) {
               </Button>,
               <Button
                 key={`${uniqueId()}`}
-                onClick={() => navigate(`/invoice/read/${currentErp._id}`)}
+                onClick={() => navigate(`/admin/invoice/read/${currentErp.invoice?._id}`)}
                 icon={<FileTextOutlined />}
               >
                 {translate('Show invoice')}
@@ -86,34 +73,27 @@ export default function Payment({ config, currentItem }) {
           lg={{ span: 10, order: 2, push: 4 }}
         >
           <div className="space50"></div>
-          <Descriptions title={`${translate('Client')} : ${currentErp.client.name}`} column={1}>
-            <Descriptions.Item label={translate('email')}>{client.email}</Descriptions.Item>
-            <Descriptions.Item label={translate('Phone')}>{client.phone}</Descriptions.Item>
+          <Descriptions title={`${translate('Customer')} : ${currentErp.invoice?.job?.customer}`} column={1}>
+            <Descriptions.Item label={translate('Job ID')}>{currentErp.invoice?.job?.jobId}</Descriptions.Item>
             <Divider dashed />
-            <Descriptions.Item label={translate('Payment Status')}>
-              <span>{currentErp.paymentStatus}</span>
+            <Descriptions.Item label={translate('Invoice Status')}>
+               <Tag color={tagColor(currentErp.invoice?.status)}>{currentErp.invoice?.status}</Tag>
             </Descriptions.Item>
-            <Descriptions.Item label={translate('SubTotal')}>
+            <Descriptions.Item label={translate('Invoice Amount')}>
               {money.moneyFormatter({
-                amount: currentErp.subTotal,
+                amount: currentErp.invoice?.total,
                 currency_code: currentErp.currency,
               })}
             </Descriptions.Item>
-            <Descriptions.Item label={translate('Total')}>
+            <Descriptions.Item label={translate('Total Paid')}>
               {money.moneyFormatter({
-                amount: currentErp.total,
+                amount: currentErp.invoice?.amountPaid,
                 currency_code: currentErp.currency,
               })}
             </Descriptions.Item>
-            <Descriptions.Item label="Discount">
+            <Descriptions.Item label={translate('Amount Due')}>
               {money.moneyFormatter({
-                amount: currentErp.discount,
-                currency_code: currentErp.currency,
-              })}
-            </Descriptions.Item>
-            <Descriptions.Item label="Balance">
-              {money.moneyFormatter({
-                amount: currentErp.credit,
+                amount: currentErp.invoice?.amountDue,
                 currency_code: currentErp.currency,
               })}
             </Descriptions.Item>
@@ -127,7 +107,7 @@ export default function Payment({ config, currentItem }) {
           md={{ span: 12, order: 1 }}
           lg={{ span: 10, order: 1, push: 2 }}
         >
-          <UpdatePayment config={config} currentInvoice={currentErp} />
+          <UpdatePayment config={config} currentPayment={currentErp} />
         </Col>
       </Row>
     </>

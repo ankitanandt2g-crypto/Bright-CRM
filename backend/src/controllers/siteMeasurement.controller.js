@@ -6,18 +6,25 @@ const Job = mongoose.models.Job;
 if (!SiteMeasurement) throw new Error("SiteMeasurement model not loaded");
 if (!Job) throw new Error("Job model not loaded");
 
-// sync related job stage/status after create/update
-const syncJobStage = async (jobObjectId) => {
+// sync related job timeline stage/status after create/update
+const syncJobStage = async (jobObjectId, isCompleted = false) => {
   if (!jobObjectId) return;
 
-  await Job.findByIdAndUpdate(
-    jobObjectId,
-    {
-      stage: "Site Measurement",
-      status: "Active",
-    },
-    { new: true }
-  );
+  const job = await Job.findById(jobObjectId);
+  if (!job) return;
+
+  if (!job.workflowEvents) job.workflowEvents = {};
+  if (!job.workflowEvents.siteMeasurement) job.workflowEvents.siteMeasurement = {};
+
+  if (isCompleted && !job.workflowEvents.siteMeasurement.isCompleted) {
+    job.workflowEvents.siteMeasurement.isCompleted = true;
+    job.workflowEvents.siteMeasurement.completedAt = new Date();
+    job.workflowEvents.siteMeasurement.completedBy = "Site Measurement Module";
+    job.stage = "planning"; // Move to Planning
+  }
+
+  job.markModified("workflowEvents");
+  await job.save();
 };
 
 // GET /api/measurement/list
@@ -115,7 +122,11 @@ exports.createMeasurement = async (req, res) => {
       accessDetails: payload.accessDetails || "",
       parkingDetails: payload.parkingDetails || "",
       powerAvailable: !!payload.powerAvailable,
+      powerLocation: payload.powerLocation || "",
       waterAvailable: !!payload.waterAvailable,
+      waterLocation: payload.waterLocation || "",
+      liftAccess: payload.liftAccess || "",
+      washroomAccess: payload.washroomAccess || "",
       publicRisk: payload.publicRisk || "",
       whsHazards: payload.whsHazards || "",
       gpsLocation: payload.gpsLocation || "",
@@ -127,7 +138,7 @@ exports.createMeasurement = async (req, res) => {
       status: payload.status || "Completed",
     });
 
-    await syncJobStage(payload.jobId);
+    await syncJobStage(payload.jobId, payload.status === "Completed");
 
     return res.status(201).json({
       success: true,
@@ -179,7 +190,7 @@ exports.updateMeasurement = async (req, res) => {
       }
     ).populate("jobId", "jobId customer site stage status");
 
-    await syncJobStage(updated?.jobId?._id || existing.jobId);
+    await syncJobStage(updated?.jobId?._id || existing.jobId, payload.status === "Completed" || updated.status === "Completed");
 
     return res.status(200).json({
       success: true,

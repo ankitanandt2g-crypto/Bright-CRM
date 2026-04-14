@@ -61,7 +61,7 @@ export default function UpdateQuoteModule({ config }) {
     if (id) fetchQuote();
   }, [id]);
 
-  const isLocked = currentQuote?.status === "Converted to Job";
+  const isLocked = currentQuote?.status === "Accepted" || currentQuote?.status === "Converted to Job";
 
   const onSubmit = async (values) => {
     try {
@@ -127,8 +127,22 @@ export default function UpdateQuoteModule({ config }) {
         <Alert
           type="info"
           showIcon
-          message="This quote is already converted to a Job and is locked."
+          message="This quote is Accepted and locked from further edits."
           style={{ marginBottom: 12 }}
+        />
+      )}
+
+      {currentQuote.revisions?.length > 0 && (
+        <Alert
+          type="success"
+          showIcon
+          message={`This quote has ${currentQuote.revisions.length} previous versions.`}
+          style={{ marginBottom: 12 }}
+          action={
+            <Button size="small" type="text">
+              Current Version: v{currentQuote.version || 1}
+            </Button>
+          }
         />
       )}
 
@@ -138,6 +152,7 @@ export default function UpdateQuoteModule({ config }) {
         onSubmit={onSubmit}
         onCancel={() => navigate(`/admin/quote/read/${id}`)}
         loading={loading}
+        isLocked={isLocked}
       />
     </Card>
   );

@@ -1,18 +1,68 @@
-// frontend/src/pages/CustomerPortal/ProjectDetails/index.jsx
-import { useEffect, useState } from "react";
-import { Card, Descriptions, Tag, Button, Row, Col, Timeline, message, Spin } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Card,
+  Descriptions,
+  Tag,
+  Button,
+  Row,
+  Col,
+  Timeline,
+  message,
+  Spin,
+} from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import { customerGetProjectById } from "../customerApi";
 
-const stageColor = (stage) => {
-  const s = String(stage || "").toLowerCase();
-  if (s.includes("planning")) return "blue";
-  if (s.includes("fabrication")) return "purple";
-  if (s.includes("quality")) return "gold";
-  if (s.includes("installation")) return "green";
-  if (s.includes("hold")) return "orange";
-  if (s.includes("closed") || s.includes("completed")) return "success";
+const stateColor = (value) => {
+  const s = String(value || "").toLowerCase();
+
+  if (s.includes("new")) return "blue";
+  if (s.includes("active")) return "processing";
+  if (s.includes("completed")) return "success";
+  if (s.includes("closed")) return "default";
   return "default";
+};
+
+const typeColor = (value) => {
+  const s = String(value || "").toLowerCase();
+  if (s.includes("commercial")) return "purple";
+  if (s.includes("residential")) return "green";
+  return "default";
+};
+
+const getStageStatus = (event = {}) => {
+  if (event?.isCompleted) return "Completed";
+
+  const hasStarted = Boolean(
+    event?.actualHours ||
+      event?.startActual ||
+      event?.approvalDate ||
+      event?.requestDate ||
+      event?.scheduledDate ||
+      event?.completionDate ||
+      event?.signatureCapture ||
+      (Array.isArray(event?.pictures) && event.pictures.length) ||
+      (Array.isArray(event?.documents) && event.documents.length)
+  );
+
+  if (hasStarted) return "In Progress";
+  return "Pending";
+};
+
+const getStageColor = (status) => {
+  const s = String(status || "").toLowerCase();
+  if (s.includes("completed")) return "success";
+  if (s.includes("progress")) return "processing";
+  return "default";
+};
+
+const formatDate = (value) => {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return "";
+  }
 };
 
 export default function CustomerProjectDetails() {
@@ -28,7 +78,9 @@ export default function CustomerProjectDetails() {
       const res = await customerGetProjectById(id);
       setProject(res || null);
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Failed to load project details");
+      message.error(
+        err?.response?.data?.message || err?.message || "Failed to load project details"
+      );
     } finally {
       setLoading(false);
     }
@@ -37,6 +89,86 @@ export default function CustomerProjectDetails() {
   useEffect(() => {
     fetchDetails();
   }, [id]);
+
+  const timelineItems = useMemo(() => {
+    const wf = project?.workflowEvents || {};
+
+    const stages = [
+      {
+        key: "siteMeasurement",
+        title: "Site Measurement",
+        data: wf.siteMeasurement || {},
+      },
+      {
+        key: "drafting",
+        title: "Drafting",
+        data: wf.drafting || {},
+      },
+      {
+        key: "clientApproval",
+        title: "Client Approval",
+        data: wf.clientApproval || {},
+      },
+      {
+        key: "materialPurchasing",
+        title: "Material Purchasing",
+        data: wf.materialPurchasing || {},
+      },
+      {
+        key: "fabrication",
+        title: "Fabrication",
+        data: wf.fabrication || {},
+      },
+      {
+        key: "finishing",
+        title: "Finishing & QC",
+        data: wf.finishing || {},
+      },
+      {
+        key: "installation",
+        title: "Installation",
+        data: wf.installation || {},
+      },
+      {
+        key: "jobCompletion",
+        title: "Job Completion & Sign-Off",
+        data: wf.jobCompletion || {},
+      },
+    ];
+
+    return stages.map((stage) => {
+      const status = getStageStatus(stage.data);
+
+      const importantDate =
+        stage.data?.completedAt ||
+        stage.data?.completionDate ||
+        stage.data?.startActual ||
+        stage.data?.approvalDate ||
+        stage.data?.requestDate ||
+        stage.data?.scheduledDate ||
+        null;
+
+      return {
+        color:
+          status === "Completed"
+            ? "green"
+            : status === "In Progress"
+            ? "blue"
+            : "gray",
+        children: (
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>{stage.title}</div>
+            <Tag color={getStageColor(status)}>{status}</Tag>
+            {importantDate ? (
+              <div style={{ marginTop: 8, opacity: 0.7, fontSize: 12 }}>
+                {formatDate(importantDate)}
+              </div>
+            ) : null}
+          </div>
+        ),
+      };
+    });
+  }, [project]);
 
   if (loading) {
     return (
@@ -61,86 +193,115 @@ export default function CustomerProjectDetails() {
     );
   }
 
-  const history = Array.isArray(project?.history) ? project.history : [];
-  // expected format:
-  // history: [{ title:"Planning Started", at:"2026-02-10T...", note:"..." }]
-
   return (
     <div style={{ padding: 16 }}>
       <Row gutter={[12, 12]}>
         <Col span={24}>
           <Card
-            title={project?.title || "Project"}
-            extra={
-              <div style={{ display: "flex", gap: 8 }}>
-                <Button onClick={() => navigate("/portal/projects")}>Back</Button>
-              </div>
-            }
+            title={project?.jobId || "Project Details"}
+            extra={<Button onClick={() => navigate("/portal/projects")}>Back</Button>}
           >
             <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="Stage">
-                <Tag color={stageColor(project?.stage)}>{project?.stage || "—"}</Tag>
+              <Descriptions.Item label="Project ID">
+                {project?.jobId || "—"}
               </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <Tag>{project?.status || "—"}</Tag>
+
+              <Descriptions.Item label="State">
+                <Tag color={stateColor(project?.systemState)}>
+                  {project?.systemState || "New"}
+                </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Start Date">
-                {project?.startDate ? new Date(project.startDate).toLocaleDateString() : "—"}
+
+              <Descriptions.Item label="Type">
+                <Tag color={typeColor(project?.projectType)}>
+                  {project?.projectType || "—"}
+                </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Expected Completion">
-                {project?.expectedEndDate ? new Date(project.expectedEndDate).toLocaleDateString() : "—"}
+
+              <Descriptions.Item label="Customer">
+                {project?.customer || "—"}
               </Descriptions.Item>
-              <Descriptions.Item label="Site / Location" span={2}>
-                {project?.siteAddress || "—"}
+
+              <Descriptions.Item label="Address" span={2}>
+                {project?.address || project?.site || "—"}
               </Descriptions.Item>
-              <Descriptions.Item label="Notes" span={2}>
-                {project?.notes || "—"}
+
+              <Descriptions.Item label="Quote Value">
+                ₹ {Number(project?.lockedValue || 0).toFixed(2)}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Created On">
+                {project?.createdAt
+                  ? new Date(project.createdAt).toLocaleDateString()
+                  : "—"}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Last Updated" span={2}>
+                {project?.updatedAt
+                  ? new Date(project.updatedAt).toLocaleString()
+                  : "—"}
               </Descriptions.Item>
             </Descriptions>
           </Card>
         </Col>
 
-        <Col xs={24} md={12}>
-          <Card title="Progress Timeline">
-            {history.length === 0 ? (
-              <div style={{ opacity: 0.7 }}>No updates yet.</div>
-            ) : (
-              <Timeline
-                items={history
-                  .sort((a, b) => new Date(b?.at || 0) - new Date(a?.at || 0))
-                  .map((h) => ({
-                    children: (
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{h?.title || "Update"}</div>
-                        <div style={{ opacity: 0.7, fontSize: 12 }}>
-                          {h?.at ? new Date(h.at).toLocaleString() : ""}
-                        </div>
-                        {h?.note ? <div style={{ marginTop: 6 }}>{h.note}</div> : null}
-                      </div>
-                    ),
-                  }))}
-              />
-            )}
+        <Col xs={24} md={14}>
+          <Card title="Project Timeline">
+            <Timeline items={timelineItems} />
           </Card>
         </Col>
 
-        <Col xs={24} md={12}>
-          <Card title="Payment / Invoice Status">
+        <Col xs={24} md={10}>
+          <Card title="Financial Summary">
             <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label="Locked Value">
+                ₹ {Number(project?.lockedValue || 0).toFixed(2)}
+              </Descriptions.Item>
               <Descriptions.Item label="Total Invoiced">
-                ₹ {Number(project?.payment?.invoiced || 0).toFixed(2)}
+                ₹ {Number(project?.totalInvoiced || 0).toFixed(2)}
               </Descriptions.Item>
-              <Descriptions.Item label="Paid">
-                ₹ {Number(project?.payment?.paid || 0).toFixed(2)}
+              <Descriptions.Item label="Total Paid">
+                ₹ {Number(project?.totalPaid || 0).toFixed(2)}
               </Descriptions.Item>
-              <Descriptions.Item label="Due">
-                ₹ {Number(project?.payment?.due || 0).toFixed(2)}
+              <Descriptions.Item label="Balance Due">
+                ₹{" "}
+                {Number(
+                  (project?.totalInvoiced || 0) - (project?.totalPaid || 0)
+                ).toFixed(2)}
               </Descriptions.Item>
             </Descriptions>
+          </Card>
 
-            <div style={{ marginTop: 12, opacity: 0.7 }}>
-              (Optional next step: show invoice list + PDF download)
-            </div>
+          <Card title="System Conditions" style={{ marginTop: 12 }}>
+            <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label="Overdue">
+                {project?.conditions?.isOverdue ? (
+                  <Tag color="error">Yes</Tag>
+                ) : (
+                  <Tag color="success">No</Tag>
+                )}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="On Hold">
+                {project?.conditions?.onHold ? (
+                  <Tag color="warning">Yes</Tag>
+                ) : (
+                  <Tag color="success">No</Tag>
+                )}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Has Defects">
+                {project?.conditions?.hasDefects ? (
+                  <Tag color="error">Yes</Tag>
+                ) : (
+                  <Tag color="success">No</Tag>
+                )}
+              </Descriptions.Item>
+
+              <Descriptions.Item label="Hold Reason">
+                {project?.conditions?.holdReason || "—"}
+              </Descriptions.Item>
+            </Descriptions>
           </Card>
         </Col>
       </Row>

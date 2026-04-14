@@ -82,7 +82,11 @@ export default function SiteMeasurement() {
         accessDetails: measurement.accessDetails || "",
         parkingDetails: measurement.parkingDetails || "",
         powerAvailable: !!measurement.powerAvailable,
+        powerLocation: measurement.powerLocation || "",
         waterAvailable: !!measurement.waterAvailable,
+        waterLocation: measurement.waterLocation || "",
+        liftAccess: measurement.liftAccess || "",
+        washroomAccess: measurement.washroomAccess || "",
         publicRisk: measurement.publicRisk || "",
         whsHazards: measurement.whsHazards || "",
         gpsLocation: measurement.gpsLocation || "",
@@ -105,7 +109,11 @@ export default function SiteMeasurement() {
         accessDetails: "",
         parkingDetails: "",
         powerAvailable: false,
+        powerLocation: "",
         waterAvailable: false,
+        waterLocation: "",
+        liftAccess: "",
+        washroomAccess: "",
         publicRisk: "",
         whsHazards: "",
         gpsLocation: "",
@@ -618,12 +626,48 @@ export default function SiteMeasurement() {
                 </Col>
 
                 <Col xs={24} md={6}>
+                  <Form.Item label="Power Location" name="powerLocation">
+                    <Input
+                      placeholder="Describe power location"
+                      disabled={currentMeasurement && !isEditMode}
+                    />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24} md={6}>
                   <Form.Item
                     label="Water Available"
                     name="waterAvailable"
                     valuePropName="checked"
                   >
                     <Switch disabled={currentMeasurement && !isEditMode} />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24} md={6}>
+                  <Form.Item label="Water Location" name="waterLocation">
+                    <Input
+                      placeholder="Describe water location"
+                      disabled={currentMeasurement && !isEditMode}
+                    />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24} md={12}>
+                  <Form.Item label="Lift Access" name="liftAccess">
+                    <Input
+                      placeholder="Describe lift access"
+                      disabled={currentMeasurement && !isEditMode}
+                    />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24} md={12}>
+                  <Form.Item label="Washroom Access" name="washroomAccess">
+                    <Input
+                      placeholder="Describe washroom access"
+                      disabled={currentMeasurement && !isEditMode}
+                    />
                   </Form.Item>
                 </Col>
               </Row>

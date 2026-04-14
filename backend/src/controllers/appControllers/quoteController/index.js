@@ -8,6 +8,11 @@ const update = require('./update');
 const convertQuoteToInvoice = require('./convertQuoteToInvoice');
 const paginatedList = require('./paginatedList');
 const read = require('./read');
+const downloadPdf = require('@/handlers/downloadHandler/downloadPdf');
+
+methods.download = (req, res) => {
+  return downloadPdf(req, res, { directory: 'quote', id: req.params.id });
+};
 
 methods.list = paginatedList;
 methods.read = read;

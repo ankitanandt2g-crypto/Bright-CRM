@@ -1,9 +1,8 @@
 const mongoose = require('mongoose');
 
-const Model = mongoose.model('Setting');
-
 const increaseBySettingKey = async ({ settingKey }) => {
   try {
+    const Model = mongoose.models.Setting || mongoose.model('Setting');
     if (!settingKey) {
       return null;
     }

@@ -6,18 +6,31 @@ const Job = mongoose.models.Job;
 if (!Planning) throw new Error("Planning model not loaded");
 if (!Job) throw new Error("Job model not loaded");
 
-// helper: when planning starts, move related job to Planning Lock
-const syncJobPlanningStage = async (jobObjectId) => {
+const isPlanningStatusCompleted = (status) => {
+  if (!status) return false;
+  const normalized = String(status).trim().toLowerCase();
+  return ["completed", "done"].includes(normalized);
+};
+
+// helper: when planning starts, move related job to Client Approval (Planning analog)
+const syncJobPlanningStage = async (jobObjectId, isCompleted = false) => {
   if (!jobObjectId) return;
 
-  await Job.findByIdAndUpdate(
-    jobObjectId,
-    {
-      stage: "Planning Lock",
-      status: "Active",
-    },
-    { new: true }
-  );
+  const job = await Job.findById(jobObjectId);
+  if (!job) return;
+
+  if (!job.workflowEvents) job.workflowEvents = {};
+  if (!job.workflowEvents.planning) job.workflowEvents.planning = {};
+
+  if (isCompleted && !job.workflowEvents.planning.isCompleted) {
+    job.workflowEvents.planning.isCompleted = true;
+    job.workflowEvents.planning.approvalDate = new Date();
+    job.workflowEvents.planning.completedAt = new Date();
+    job.workflowEvents.planning.completedBy = "Planning Module";
+  }
+
+  job.markModified("workflowEvents");
+  await job.save();
 };
 
 // GET /api/planning/list/:jobId
@@ -117,7 +130,7 @@ exports.create = async (req, res) => {
     });
 
     // planning started => move job to Planning Lock
-    await syncJobPlanningStage(payload.jobId);
+    await syncJobPlanningStage(payload.jobId, isPlanningStatusCompleted(payload.status));
 
     return res.status(201).json({
       success: true,
@@ -161,7 +174,8 @@ exports.update = async (req, res) => {
       runValidators: true,
     });
 
-    await syncJobPlanningStage(updated.jobId);
+    const completeStatus = isPlanningStatusCompleted(payload.status || updated.status);
+    await syncJobPlanningStage(updated.jobId, completeStatus);
 
     return res.status(200).json({
       success: true,

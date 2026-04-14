@@ -4,11 +4,13 @@ const {
   listJobs,
   createJob,
   deleteJob,
-  createJobFromLead,
   updateJob,
   readJob, // ✅ NEW
+  updateJobStage,
+  summaryJobs,
 } = require("../../controllers/job.controller");
 
+router.get("/summary", summaryJobs);
 router.get("/list", listJobs);
 router.post("/create", createJob);
 
@@ -18,7 +20,7 @@ router.get("/read/:id", readJob);
 router.delete("/delete/:id", deleteJob);
 router.patch("/update/:id", updateJob);
 
-// ✅ Lead -> Job conversion
-router.post("/from-lead/:leadId", createJobFromLead);
+// ✅ Workflow stage update
+router.patch("/stage/:id/:stageName", updateJobStage);
 
 module.exports = router;

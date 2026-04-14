@@ -15,48 +15,54 @@ import {
   message,
   Empty,
   Space,
+  Popconfirm,
 } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
+import {
+  getEmployees,
+  createEmployee,
+  updateEmployee,
+  deleteEmployee,
+} from "./employeeApi";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
-const { TextArea } = Input;
+const { TextArea, Search } = Input;
+
+const DEPARTMENTS = [
+  "Fabrication",
+  "Installation",
+  "Quality Control",
+  "Planning",
+  "Drafting",
+  "Site Measurement",
+  "Admin",
+  "HR",
+];
+
+const DESIGNATIONS = [
+  "Welder",
+  "Installer",
+  "Supervisor",
+  "Manager",
+  "Engineer",
+  "QC Inspector",
+  "Planner",
+  "Draftsman",
+  "HR Executive",
+  "Admin Executive",
+];
 
 export default function Employee() {
-  const [employees, setEmployees] = useState([
-    {
-      _id: "1",
-      employeeId: "EMP123",
-      name: "Rahul Kumar",
-      email: "rahul@example.com",
-      phone: "9876543210",
-      designation: "Welder",
-      department: "Fabrication",
-      joiningDate: "01-02-2026",
-      resignationDate: "",
-      status: "Active",
-      address: "Noida",
-    },
-    {
-      _id: "2",
-      employeeId: "EMP124",
-      name: "Amit Sharma",
-      email: "amit@example.com",
-      phone: "9876501234",
-      designation: "Installer",
-      department: "Installation",
-      joiningDate: "10-02-2026",
-      resignationDate: "",
-      status: "Active",
-      address: "Ghaziabad",
-    },
-  ]);
-
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
   const [editingEmployee, setEditingEmployee] = useState(null);
+  const [searchText, setSearchText] = useState("");
 
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -69,38 +75,46 @@ export default function Employee() {
     try {
       setLoading(true);
 
-      // Backend API call here
-      // Example:
-      // const res = await getEmployees();
-      // setEmployees(res?.result || []);
+      const res = await getEmployees();
+      const result = Array.isArray(res?.result) ? res.result : [];
 
-      setLoading(false);
+      setEmployees(result);
     } catch (error) {
+      setEmployees([]);
+      message.error(
+        error?.response?.data?.message || "Failed to fetch employees"
+      );
+    } finally {
       setLoading(false);
-      message.error("Failed to fetch employees");
     }
   };
 
   const summary = useMemo(() => {
     const total = employees.length;
     const active = employees.filter((item) => item.status === "Active").length;
-    const inactive = employees.filter((item) => item.status === "Inactive").length;
+    const inactive = employees.filter(
+      (item) => item.status === "Inactive"
+    ).length;
 
     return { total, active, inactive };
   }, [employees]);
 
+  const filteredEmployees = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+
+    if (!q) return employees;
+
+    return employees.filter((item) => {
+      const name = item?.name?.toLowerCase() || "";
+      const employeeId = item?.employeeId?.toLowerCase() || "";
+
+      return name.includes(q) || employeeId.includes(q);
+    });
+  }, [employees, searchText]);
+
   const handleCreateEmployee = async () => {
     try {
       const values = await createForm.validateFields();
-
-      const emailExists = employees.some(
-        (item) => item.email.toLowerCase() === values.email.toLowerCase()
-      );
-
-      if (emailExists) {
-        message.error("Employee with this email already exists");
-        return;
-      }
 
       const payload = {
         name: values.name,
@@ -111,32 +125,27 @@ export default function Employee() {
         joiningDate: values.joiningDate
           ? values.joiningDate.format("DD-MM-YYYY")
           : "",
-        resignationDate: "",
         status: values.status,
         address: values.address || "",
       };
 
-      // Real backend call:
-      // const res = await createEmployee(payload);
-      // employeeId backend se auto-generate hoga e.g. EMP123
-      // if (res?.success) {
-      //   message.success("Employee created successfully");
-      //   fetchEmployees();
-      // }
+      const res = await createEmployee(payload);
 
-      // Temporary local UI testing
-      const nextId = 123 + employees.length;
-      const newEmployee = {
-        _id: Date.now().toString(),
-        employeeId: `EMP${nextId}`,
-        ...payload,
-      };
+      if (res?.success) {
+        message.success(res?.message || "Employee created successfully");
+        createForm.resetFields();
+        setIsCreateModalOpen(false);
+        fetchEmployees();
+      } else {
+        message.error(res?.message || "Failed to create employee");
+      }
+    } catch (error) {
+      if (error?.errorFields) return;
 
-      setEmployees((prev) => [...prev, newEmployee]);
-      createForm.resetFields();
-      setIsCreateModalOpen(false);
-      message.success("Employee created successfully");
-    } catch (error) {}
+      message.error(
+        error?.response?.data?.message || "Failed to create employee"
+      );
+    }
   };
 
   const openEditModal = (record) => {
@@ -189,93 +198,122 @@ export default function Employee() {
         address: values.address || "",
       };
 
-      // Real backend call:
-      // const res = await updateEmployee(editingEmployee._id, payload);
-      // if (res?.success) {
-      //   message.success(
-      //     values.status === "Inactive"
-      //       ? "Employee marked as inactive and resignation date updated automatically"
-      //       : "Employee updated successfully"
-      //   );
-      //   fetchEmployees();
-      // }
+      const res = await updateEmployee(editingEmployee._id, payload);
 
-      setEmployees((prev) =>
-        prev.map((item) =>
-          item._id === editingEmployee._id ? { ...item, ...payload } : item
-        )
+      if (res?.success) {
+        setIsEditModalOpen(false);
+        setEditingEmployee(null);
+        editForm.resetFields();
+
+        message.success(
+          values.status === "Inactive"
+            ? "Employee marked as inactive and resignation date updated automatically"
+            : res?.message || "Employee updated successfully"
+        );
+
+        fetchEmployees();
+      } else {
+        message.error(res?.message || "Failed to update employee");
+      }
+    } catch (error) {
+      if (error?.errorFields) return;
+
+      message.error(
+        error?.response?.data?.message || "Failed to update employee"
       );
+    }
+  };
 
-      setIsEditModalOpen(false);
-      setEditingEmployee(null);
-      editForm.resetFields();
+  const handleDeleteEmployee = async (id) => {
+    try {
+      const res = await deleteEmployee(id);
 
-      message.success(
-        values.status === "Inactive"
-          ? "Employee marked as inactive and resignation date updated automatically"
-          : "Employee updated successfully"
+      if (res?.success) {
+        message.success(res?.message || "Employee deleted successfully");
+        fetchEmployees();
+      } else {
+        message.error(res?.message || "Failed to delete employee");
+      }
+    } catch (error) {
+      message.error(
+        error?.response?.data?.message || "Failed to delete employee"
       );
-    } catch (error) {}
+    }
   };
 
   const columns = [
     {
       title: "Employee ID",
       dataIndex: "employeeId",
-      width: 120,
+      width: 130,
     },
     {
       title: "Name",
       dataIndex: "name",
-      width: 170,
+      width: 180,
     },
     {
       title: "Email",
       dataIndex: "email",
-      width: 220,
+      width: 240,
     },
     {
       title: "Phone",
       dataIndex: "phone",
-      width: 130,
+      width: 140,
     },
     {
       title: "Designation",
       dataIndex: "designation",
-      width: 150,
+      width: 160,
     },
     {
       title: "Department",
       dataIndex: "department",
-      width: 150,
+      width: 160,
     },
     {
       title: "Joining Date",
       dataIndex: "joiningDate",
-      width: 130,
+      width: 140,
+      render: (value) => value || "-",
     },
     {
       title: "Resignation Date",
       dataIndex: "resignationDate",
-      width: 140,
+      width: 150,
       render: (value) => value || "-",
     },
     {
       title: "Status",
       dataIndex: "status",
-      width: 110,
+      width: 120,
       render: (value) => (
         <Tag color={value === "Active" ? "green" : "red"}>{value}</Tag>
       ),
     },
     {
       title: "Action",
-      width: 100,
+      width: 180,
       fixed: "right",
       render: (_, record) => (
-        <Button type="link" onClick={() => openEditModal(record)}>
-          Edit
-        </Button>
+        <Space wrap>
+          <Button type="link" onClick={() => openEditModal(record)}>
+            Edit
+          </Button>
+
+          <Popconfirm
+            title="Delete Employee"
+            description="Are you sure you want to delete this employee?"
+            onConfirm={() => handleDeleteEmployee(record._id)}
+            okText="Yes"
+            cancelText="No"
+          >
+            <Button type="link" danger>
+              Delete
+            </Button>
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
@@ -330,22 +368,47 @@ export default function Employee() {
         </Col>
       </Row>
 
-      {employees.length ? (
+      <Card style={{ marginBottom: 20 }}>
+        <Row gutter={[16, 16]} align="middle">
+          <Col xs={24} md={12} lg={10}>
+            <Search
+              allowClear
+              placeholder="Search by employee name or employee ID"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onSearch={(value) => setSearchText(value)}
+            />
+          </Col>
+
+          <Col xs={24} md={12} lg={14}>
+            <Text type="secondary">
+              Search example: <b>Rahul</b> or <b>EMP123</b>
+            </Text>
+          </Col>
+        </Row>
+      </Card>
+
+      {filteredEmployees.length ? (
         <Table
           rowKey="_id"
           loading={loading}
           columns={columns}
-          dataSource={employees}
+          dataSource={filteredEmployees}
           pagination={{ pageSize: 8 }}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 1600 }}
         />
       ) : (
         <Card>
-          <Empty description="No employees found" />
+          <Empty
+            description={
+              searchText
+                ? "No employee found for this search"
+                : "No employees found"
+            }
+          />
         </Card>
       )}
 
-      {/* CREATE EMPLOYEE MODAL */}
       <Modal
         title="Create Employee"
         open={isCreateModalOpen}
@@ -412,9 +475,15 @@ export default function Employee() {
               <Form.Item
                 label="Designation"
                 name="designation"
-                rules={[{ required: true, message: "Please enter designation" }]}
+                rules={[{ required: true, message: "Please select designation" }]}
               >
-                <Input placeholder="Welder / Installer / Supervisor" />
+                <Select placeholder="Select designation">
+                  {DESIGNATIONS.map((item) => (
+                    <Option key={item} value={item}>
+                      {item}
+                    </Option>
+                  ))}
+                </Select>
               </Form.Item>
             </Col>
 
@@ -425,14 +494,11 @@ export default function Employee() {
                 rules={[{ required: true, message: "Please select department" }]}
               >
                 <Select placeholder="Select department">
-                  <Option value="Fabrication">Fabrication</Option>
-                  <Option value="Installation">Installation</Option>
-                  <Option value="Quality Control">Quality Control</Option>
-                  <Option value="Planning">Planning</Option>
-                  <Option value="Drafting">Drafting</Option>
-                  <Option value="Site Measurement">Site Measurement</Option>
-                  <Option value="Admin">Admin</Option>
-                  <Option value="HR">HR</Option>
+                  {DEPARTMENTS.map((item) => (
+                    <Option key={item} value={item}>
+                      {item}
+                    </Option>
+                  ))}
                 </Select>
               </Form.Item>
             </Col>
@@ -480,7 +546,6 @@ export default function Employee() {
         </Form>
       </Modal>
 
-      {/* EDIT EMPLOYEE MODAL */}
       <Modal
         title="Edit Employee"
         open={isEditModalOpen}
@@ -560,9 +625,15 @@ export default function Employee() {
               <Form.Item
                 label="Designation"
                 name="designation"
-                rules={[{ required: true, message: "Please enter designation" }]}
+                rules={[{ required: true, message: "Please select designation" }]}
               >
-                <Input placeholder="Enter designation" />
+                <Select placeholder="Select designation">
+                  {DESIGNATIONS.map((item) => (
+                    <Option key={item} value={item}>
+                      {item}
+                    </Option>
+                  ))}
+                </Select>
               </Form.Item>
             </Col>
 
@@ -573,14 +644,11 @@ export default function Employee() {
                 rules={[{ required: true, message: "Please select department" }]}
               >
                 <Select placeholder="Select department">
-                  <Option value="Fabrication">Fabrication</Option>
-                  <Option value="Installation">Installation</Option>
-                  <Option value="Quality Control">Quality Control</Option>
-                  <Option value="Planning">Planning</Option>
-                  <Option value="Drafting">Drafting</Option>
-                  <Option value="Site Measurement">Site Measurement</Option>
-                  <Option value="Admin">Admin</Option>
-                  <Option value="HR">HR</Option>
+                  {DEPARTMENTS.map((item) => (
+                    <Option key={item} value={item}>
+                      {item}
+                    </Option>
+                  ))}
                 </Select>
               </Form.Item>
             </Col>
@@ -600,7 +668,7 @@ export default function Employee() {
                 label="Status"
                 name="status"
                 rules={[{ required: true, message: "Please select status" }]}
-                extra="If status is changed to Inactive, resignation date will be updated automatically."
+                extra="If status becomes inactive, resignation date updates automatically."
               >
                 <Select placeholder="Select status">
                   <Option value="Active">Active</Option>
@@ -631,7 +699,7 @@ export default function Employee() {
         <div style={{ marginTop: 8 }}>
           <Space direction="vertical" size={2}>
             <Text type="secondary">
-              Default behavior: resignation date remains empty for active employees.
+              Resignation date stays empty for active employees.
             </Text>
             <Text type="secondary">
               When admin marks employee inactive, resignation date is set automatically.

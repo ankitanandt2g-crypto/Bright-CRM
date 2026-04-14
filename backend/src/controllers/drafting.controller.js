@@ -7,37 +7,40 @@ if (!Drafting) throw new Error("Drafting model not loaded");
 if (!Job) throw new Error("Job model not loaded");
 
 // keep job in Drafting stage while records are being created/updated
-const syncJobDraftingStage = async (jobObjectId) => {
+const syncJobDraftingStage = async (jobObjectId, isIFCApproved = false) => {
   if (!jobObjectId) return;
 
   const job = await Job.findById(jobObjectId);
   if (!job) return;
 
-  // don't move backward if already ahead
-  if (job.stage === "Job Scheduling") return;
+  if (!job.workflowEvents) job.workflowEvents = {};
+  if (!job.workflowEvents.drafting) job.workflowEvents.drafting = {};
+  if (!job.workflowEvents.clientApproval) job.workflowEvents.clientApproval = {};
 
-  await Job.findByIdAndUpdate(
-    jobObjectId,
-    {
-      stage: "Drafting",
-      status: "Active",
-    },
-    { new: true }
-  );
-};
+  if (isIFCApproved) {
+    if (!job.workflowEvents.drafting.isCompleted) {
+      job.workflowEvents.drafting.isCompleted = true;
+      job.workflowEvents.drafting.completedAt = new Date();
+      job.workflowEvents.drafting.completedBy = "Drafting Module (IFC)";
+    }
+    if (!job.workflowEvents.clientApproval.isCompleted) {
+      job.workflowEvents.clientApproval.isCompleted = true;
+      job.workflowEvents.clientApproval.approvalDate = new Date();
+      job.workflowEvents.clientApproval.completedAt = new Date();
+      job.workflowEvents.clientApproval.completedBy = "Drafting Module (IFC)";
+    }
+  } else {
+    // Both pending
+    job.workflowEvents.drafting.isCompleted = false;
+    job.workflowEvents.clientApproval.isCompleted = false;
+    
+    if (!job.workflowEvents.drafting.startActual) {
+      job.workflowEvents.drafting.startActual = new Date();
+    }
+  }
 
-// move job to scheduling when IFC is approved
-const syncJobIFCApproved = async (jobObjectId) => {
-  if (!jobObjectId) return;
-
-  await Job.findByIdAndUpdate(
-    jobObjectId,
-    {
-      stage: "Job Scheduling",
-      status: "Active",
-    },
-    { new: true }
-  );
+  job.markModified("workflowEvents");
+  await job.save();
 };
 
 // GET /api/drafting/list/:jobId
@@ -143,11 +146,7 @@ exports.create = async (req, res) => {
         payload.status === "IFC Approved",
     });
 
-    if (created.isIFCApproved || created.status === "IFC Approved") {
-      await syncJobIFCApproved(payload.jobId);
-    } else {
-      await syncJobDraftingStage(payload.jobId);
-    }
+    await syncJobDraftingStage(payload.jobId, created.isIFCApproved || created.status === "IFC Approved");
 
     return res.status(201).json({
       success: true,
@@ -187,11 +186,7 @@ exports.update = async (req, res) => {
       runValidators: true,
     });
 
-    if (updated.isIFCApproved || updated.status === "IFC Approved") {
-      await syncJobIFCApproved(updated.jobId);
-    } else {
-      await syncJobDraftingStage(updated.jobId);
-    }
+    await syncJobDraftingStage(updated.jobId, updated.isIFCApproved || updated.status === "IFC Approved");
 
     return res.status(200).json({
       success: true,

@@ -23,6 +23,10 @@ const AdminPasswordSchema = new Schema({
     type: Boolean,
     default: false,
   },
+  phoneOTP: String,
+  phoneOTPExpires: Date,
+  emailOTP: String,
+  emailOTPExpires: Date,
   authType: {
     type: String,
     default: 'email',

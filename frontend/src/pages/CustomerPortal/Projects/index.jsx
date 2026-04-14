@@ -1,17 +1,22 @@
-// frontend/src/pages/CustomerPortal/Projects/index.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Card, Table, Tag, Input, Button, message } from "antd";
 import { useNavigate } from "react-router-dom";
 import { customerGetProjects } from "../customerApi";
 
-const stageColor = (stage) => {
-  const s = String(stage || "").toLowerCase();
-  if (s.includes("planning")) return "blue";
-  if (s.includes("fabrication")) return "purple";
-  if (s.includes("quality")) return "gold";
-  if (s.includes("installation")) return "green";
-  if (s.includes("hold")) return "orange";
-  if (s.includes("closed") || s.includes("completed")) return "success";
+const stateColor = (value) => {
+  const s = String(value || "").toLowerCase();
+
+  if (s.includes("new")) return "blue";
+  if (s.includes("active")) return "processing";
+  if (s.includes("completed")) return "success";
+  if (s.includes("closed")) return "default";
+  return "default";
+};
+
+const typeColor = (value) => {
+  const s = String(value || "").toLowerCase();
+  if (s.includes("commercial")) return "purple";
+  if (s.includes("residential")) return "green";
   return "default";
 };
 
@@ -27,7 +32,9 @@ export default function CustomerProjects() {
       const res = await customerGetProjects();
       setProjects(Array.isArray(res) ? res : []);
     } catch (err) {
-      message.error(err?.response?.data?.message || err?.message || "Failed to fetch projects");
+      message.error(
+        err?.response?.data?.message || err?.message || "Failed to fetch projects"
+      );
     } finally {
       setLoading(false);
     }
@@ -40,27 +47,50 @@ export default function CustomerProjects() {
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return projects;
+
     return projects.filter((p) => {
-      const title = String(p?.title || "").toLowerCase();
-      const status = String(p?.status || "").toLowerCase();
-      const stage = String(p?.stage || "").toLowerCase();
-      return title.includes(query) || status.includes(query) || stage.includes(query);
+      const jobId = String(p?.jobId || "").toLowerCase();
+      const state = String(p?.systemState || "").toLowerCase();
+      const type = String(p?.projectType || p?.categoryCode || "").toLowerCase();
+      const address = String(p?.address || p?.site || "").toLowerCase();
+      const customer = String(p?.customer || "").toLowerCase();
+
+      return (
+        jobId.includes(query) ||
+        state.includes(query) ||
+        type.includes(query) ||
+        address.includes(query) ||
+        customer.includes(query)
+      );
     });
   }, [projects, q]);
 
   const columns = [
-    { title: "Project", dataIndex: "title", key: "title" },
     {
-      title: "Stage",
-      dataIndex: "stage",
-      key: "stage",
-      render: (v) => <Tag color={stageColor(v)}>{v || "—"}</Tag>,
+      title: "Project ID",
+      dataIndex: "jobId",
+      key: "jobId",
+      render: (v) => v || "—",
     },
     {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (v) => <Tag>{v || "—"}</Tag>,
+      title: "Type",
+      dataIndex: "projectType",
+      key: "projectType",
+      render: (_, row) => {
+        const value = row?.projectType || row?.categoryCode || "—";
+        return <Tag color={typeColor(value)}>{value}</Tag>;
+      },
+    },
+    {
+      title: "Address",
+      key: "address",
+      render: (_, row) => row?.address || row?.site || "—",
+    },
+    {
+      title: "State",
+      dataIndex: "systemState",
+      key: "systemState",
+      render: (v) => <Tag color={stateColor(v)}>{v || "New"}</Tag>,
     },
     {
       title: "Last Update",
@@ -90,8 +120,8 @@ export default function CustomerProjects() {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by project, stage, status..."
-            style={{ width: 320 }}
+            placeholder="Search by project id, type, address, state..."
+            style={{ width: 340 }}
             allowClear
           />
         }
@@ -101,6 +131,7 @@ export default function CustomerProjects() {
           loading={loading}
           columns={columns}
           dataSource={filtered}
+          pagination={{ pageSize: 10 }}
         />
       </Card>
     </div>

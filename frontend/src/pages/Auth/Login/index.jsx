@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Card, Form, Input, Button, Select, Typography, message } from "antd";
+import { Card, Form, Input, Button, Radio, Typography, message } from "antd";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useDispatch } from "react-redux";
+import { UserOutlined, LockOutlined, IdcardOutlined, MailOutlined } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
-const { Option } = Select;
 
 const API = "http://localhost:8888/api/auth/login";
 
@@ -41,15 +41,12 @@ export default function Login() {
         return;
       }
 
-      // ✅ 1) Save token/user in multiple keys (Idurar modules may read different keys)
       localStorage.setItem("token", token);
       localStorage.setItem("authToken", token);
       localStorage.setItem("jwt", token);
-
       localStorage.setItem("user", JSON.stringify(user));
       localStorage.setItem("currentUser", JSON.stringify(user));
 
-      // ✅ Often templates store a combined auth object
       localStorage.setItem(
         "auth",
         JSON.stringify({
@@ -62,10 +59,8 @@ export default function Login() {
         })
       );
 
-      // ✅ 2) Set axios default header globally (VERY IMPORTANT)
       axios.defaults.headers.common.Authorization = `Bearer ${token}`;
 
-      // ✅ 3) Redux backup dispatch (in case modules rely on redux state)
       const authPayload = {
         token,
         user,
@@ -81,7 +76,6 @@ export default function Login() {
 
       message.success("Login successful");
 
-      // ✅ role based redirect
       if (user.role === "admin") navigate("/admin/dashboard", { replace: true });
       else if (user.role === "worker") navigate("/worker", { replace: true });
       else navigate("/portal", { replace: true });
@@ -98,71 +92,110 @@ export default function Login() {
     <div
       style={{
         minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: 16,
-        background: "#0b1220",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        background: "#f0f2f5",
       }}
     >
-      <Card style={{ width: 420, borderRadius: 12 }}>
-        <Title level={3} style={{ marginBottom: 0 }}>
-          Idurar CRM
-        </Title>
-        <Text type="secondary">Login as Admin / Worker / Customer</Text>
+      <Card 
+        style={{ 
+          width: "100%",
+          maxWidth: 400, 
+          borderRadius: 12,
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+        }}
+        bodyStyle={{ padding: "32px 24px" }}
+      >
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <Title level={2} style={{ marginBottom: 4, color: "#1677ff" }}>
+            Bright CRM
+          </Title>
+          <Text type="secondary">Sign in to your account</Text>
+        </div>
 
-        <div style={{ height: 16 }} />
-
-        <Form layout="vertical" onFinish={onFinish} initialValues={{ role: "admin" }}>
+        <Form 
+          layout="vertical" 
+          onFinish={onFinish} 
+          initialValues={{ role: "admin" }}
+          requiredMark={false}
+        >
           <Form.Item
-            label="Login as"
             name="role"
-            rules={[{ required: true, message: "Please select role" }]}
+            rules={[{ required: true, message: "Please select your role" }]}
+            style={{ marginBottom: 24 }}
           >
-            <Select onChange={(v) => setRole(v)}>
-              <Option value="admin">Admin</Option>
-              <Option value="worker">Worker</Option>
-              <Option value="customer">Customer</Option>
-            </Select>
+            <Radio.Group 
+              onChange={(e) => setRole(e.target.value)} 
+              buttonStyle="solid" 
+              style={{ width: "100%", textAlign: "center" }}
+            >
+              <Radio.Button value="admin" style={{ flex: 1 }}>Admin</Radio.Button>
+              <Radio.Button value="worker" style={{ flex: 1 }}>Employee</Radio.Button>
+              <Radio.Button value="customer" style={{ flex: 1 }}>Customer</Radio.Button>
+            </Radio.Group>
           </Form.Item>
 
           <Form.Item
-            label={role === "worker" ? "Worker ID" : "Email"}
+            label={role === "worker" ? "Worker ID" : "Email Address"}
             name="identifier"
             rules={[
               {
                 required: true,
-                message: role === "worker" ? "Worker ID required" : "Email required",
+                message: role === "worker" ? "Please enter your Worker ID" : "Please enter your email",
               },
             ]}
           >
-            <Input placeholder={role === "worker" ? "e.g. WRK-001" : "name@email.com"} />
+            <Input 
+              prefix={role === "worker" ? <IdcardOutlined /> : <MailOutlined />}
+              placeholder={role === "worker" ? "e.g. WRK-001" : "name@email.com"} 
+              size="large"
+            />
           </Form.Item>
 
           <Form.Item
             label="Password"
             name="password"
-            rules={[{ required: true, message: "Password required" }]}
+            rules={[{ required: true, message: "Please enter your password" }]}
+            style={{ marginBottom: 8 }}
           >
-            <Input.Password placeholder="Enter password" />
+            <Input.Password 
+              prefix={<LockOutlined />}
+              placeholder="Enter password" 
+              size="large"
+            />
           </Form.Item>
 
-          <Button type="primary" htmlType="submit" loading={loading} block>
-            Sign in
-          </Button>
-
-          <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between" }}>
+          <div style={{ textAlign: "right", marginBottom: 24 }}>
             <Text
               style={{ cursor: "pointer", color: "#1677ff" }}
               onClick={() => navigate("/forgot-password")}
             >
               Forgot password?
             </Text>
+          </div>
 
-            <Text
-              style={{ cursor: "pointer", color: "#1677ff" }}
-              onClick={() => navigate("/register")}
-            >
-              Customer Sign Up
+          <Button 
+            type="primary" 
+            htmlType="submit" 
+            loading={loading} 
+            block 
+            size="large"
+            style={{ height: 45, fontWeight: 600 }}
+          >
+            Sign In
+          </Button>
+
+          <div style={{ marginTop: 24, textAlign: "center" }}>
+            <Text type="secondary">
+              Don't have a customer account?{" "}
+              <span
+                style={{ cursor: "pointer", color: "#1677ff", fontWeight: 500 }}
+                onClick={() => navigate("/register")}
+              >
+                Sign Up
+              </span>
             </Text>
           </div>
         </Form>

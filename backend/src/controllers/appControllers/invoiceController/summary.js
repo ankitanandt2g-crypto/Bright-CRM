@@ -2,210 +2,145 @@ const mongoose = require('mongoose');
 const moment = require('moment');
 
 const Model = mongoose.model('Invoice');
+const Job = mongoose.model('Job');
+const Payment = mongoose.model('Payment');
 
 const { loadSettings } = require('@/middlewares/settings');
 
-const summary = async (req, res) => {
-  let defaultType = 'month';
+const getFilterDateRange = (query) => {
+  const { type, startDate, endDate } = query;
+  let start = moment().startOf('month');
+  let end = moment().endOf('month');
 
-  const { type } = req.query;
-
-  const settings = await loadSettings();
-
-  if (type) {
-    if (['week', 'month', 'year'].includes(type)) {
-      defaultType = type;
-    } else {
-      return res.status(400).json({
-        success: false,
-        result: null,
-        message: 'Invalid type',
-      });
-    }
+  if (type === 'today') {
+    start = moment().startOf('day');
+    end = moment().endOf('day');
+  } else if (type === 'thisWeek') {
+    start = moment().startOf('week');
+    end = moment().endOf('week');
+  } else if (type === 'thisMonth') {
+    start = moment().startOf('month');
+    end = moment().endOf('month');
+  } else if (type === 'custom' && startDate && endDate) {
+    start = moment(startDate).startOf('day');
+    end = moment(endDate).endOf('day');
   }
+  return { start, end };
+};
 
-  const currentDate = moment();
-  let startDate = currentDate.clone().startOf(defaultType);
-  let endDate = currentDate.clone().endOf(defaultType);
+const summary = async (req, res) => {
+  try {
+    const { start, end } = getFilterDateRange(req.query);
 
-  const statuses = ['draft', 'pending', 'overdue', 'paid', 'unpaid', 'partially'];
-
-  const response = await Model.aggregate([
-    {
-      $match: {
-        removed: false,
-        // date: {
-        //   $gte: startDate.toDate(),
-        //   $lte: endDate.toDate(),
-        // },
+    // Filter match object for date
+    const dateMatch = {
+      removed: false,
+      date: {
+        $gte: start.toDate(),
+        $lte: end.toDate(),
       },
-    },
-    {
-      $facet: {
-        totalInvoice: [
-          {
-            $group: {
-              _id: null,
-              total: {
-                $sum: '$total',
-              },
-              count: {
-                $sum: 1,
-              },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              total: '$total',
-              count: '$count',
-            },
-          },
-        ],
-        statusCounts: [
-          {
-            $group: {
-              _id: '$status',
-              count: {
-                $sum: 1,
-              },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              status: '$_id',
-              count: '$count',
-            },
-          },
-        ],
-        paymentStatusCounts: [
-          {
-            $group: {
-              _id: '$paymentStatus',
-              count: {
-                $sum: 1,
-              },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              status: '$_id',
-              count: '$count',
-            },
-          },
-        ],
-        overdueCounts: [
-          {
-            $match: {
-              expiredDate: {
-                $lt: new Date(),
-              },
-            },
-          },
-          {
-            $group: {
-              _id: '$status',
-              count: {
-                $sum: 1,
-              },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              status: '$_id',
-              count: '$count',
-            },
-          },
-        ],
-      },
-    },
-  ]);
-
-  let result = [];
-
-  const totalInvoices = response[0].totalInvoice ? response[0].totalInvoice[0] : 0;
-  const statusResult = response[0].statusCounts || [];
-  const paymentStatusResult = response[0].paymentStatusCounts || [];
-  const overdueResult = response[0].overdueCounts || [];
-
-  const statusResultMap = statusResult.map((item) => {
-    return {
-      ...item,
-      percentage: Math.round((item.count / totalInvoices.count) * 100),
     };
-  });
 
-  const paymentStatusResultMap = paymentStatusResult.map((item) => {
-    return {
-      ...item,
-      percentage: Math.round((item.count / totalInvoices.count) * 100),
-    };
-  });
-
-  const overdueResultMap = overdueResult.map((item) => {
-    return {
-      ...item,
-      status: 'overdue',
-      percentage: Math.round((item.count / totalInvoices.count) * 100),
-    };
-  });
-
-  statuses.forEach((status) => {
-    const found = [...paymentStatusResultMap, ...statusResultMap, ...overdueResultMap].find(
-      (item) => item.status === status
-    );
-    if (found) {
-      result.push(found);
-    }
-  });
-
-  const unpaid = await Model.aggregate([
-    {
-      $match: {
-        removed: false,
-
-        // date: {
-        //   $gte: startDate.toDate(),
-        //   $lte: endDate.toDate(),
-        // },
-        paymentStatus: {
-          $in: ['unpaid', 'partially'],
-        },
+    // Overall metrics for the period
+    const invoiceMetrics = await Model.aggregate([
+      {
+        $match: dateMatch
       },
-    },
-    {
-      $group: {
-        _id: null,
-        total_amount: {
-          $sum: {
-            $subtract: ['$total', '$credit'],
+      {
+        $group: {
+          _id: null,
+          totalInvoiced: { $sum: '$total' },
+          totalUnpaid: {
+            $sum: {
+              $cond: [
+                { $in: ['$status', ['unpaid', 'partially_paid', 'draft', 'pending']] },
+                '$amountDue',
+                0
+              ]
+            }
           },
-        },
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        total_amount: '$total_amount',
-      },
-    },
-  ]);
+          overdueCount: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $in: ['$status', ['unpaid', 'partially_paid']] },
+                    { $lt: ['$expiredDate', new Date()] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          overdueValue: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $in: ['$status', ['unpaid', 'partially_paid']] },
+                    { $lt: ['$expiredDate', new Date()] }
+                  ]
+                },
+                '$amountDue',
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]);
 
-  const finalResult = {
-    total: totalInvoices?.total,
-    total_undue: unpaid.length > 0 ? unpaid[0].total_amount : 0,
-    type,
-    performance: result,
-  };
+    // Invoice status summary for the period
+    const invoiceStatusSummary = await Model.aggregate([
+      {
+        $match: dateMatch
+      },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$total' },
+          totalPaid: { $sum: '$amountPaid' },
+          totalDue: { $sum: '$amountDue' }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          status: '$_id',
+          count: 1,
+          totalAmount: 1,
+          totalPaid: 1,
+          totalDue: 1
+        }
+      }
+    ]);
 
-  return res.status(200).json({
-    success: true,
-    result: finalResult,
-    message: `Successfully found all invoices for the last ${defaultType}`,
-  });
+    const totalCount = invoiceStatusSummary.reduce((sum, item) => sum + item.count, 0);
+
+    const result = {
+      totalCount,
+      totalInvoiced: invoiceMetrics[0]?.totalInvoiced || 0,
+      totalUnpaid: invoiceMetrics[0]?.totalUnpaid || 0,
+      overdueInvoicesCount: invoiceMetrics[0]?.overdueCount || 0,
+      overdueInvoicesValue: invoiceMetrics[0]?.overdueValue || 0,
+      invoiceStatusSummary,
+    };
+
+    return res.status(200).json({
+      success: true,
+      result,
+      message: 'Invoice summary retrieved successfully',
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      result: null,
+      message: 'Error retrieving invoice summary',
+      error: error.message
+    });
+  }
 };
 
 module.exports = summary;

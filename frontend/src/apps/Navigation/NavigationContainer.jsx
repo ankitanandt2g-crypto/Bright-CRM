@@ -30,6 +30,7 @@ import {
   DeploymentUnitOutlined,
   TeamOutlined,
   BuildOutlined,
+  MailOutlined,
 } from "@ant-design/icons";
 
 const { Sider } = Layout;
@@ -166,6 +167,11 @@ function Sidebar({ collapsible, isMobile = false, basePath = "" }) {
             label: <Link to={go("/customer")}>Customers</Link>,
           },
           {
+            key: "contact-requests",
+            icon: <MailOutlined />,
+            label: <Link to={go("/contact-requests")}>Contact Requests</Link>,
+          },
+          {
             key: "invoice",
             icon: <ContainerOutlined />,
             label: <Link to={go("/invoice")}>Invoices</Link>,
@@ -235,6 +241,7 @@ function Sidebar({ collapsible, isMobile = false, basePath = "" }) {
     installation: "execution-group",
 
     customer: "business-group",
+    "contact-requests": "business-group",
     invoice: "business-group",
     payment: "business-group",
     

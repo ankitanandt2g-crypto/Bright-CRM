@@ -11,23 +11,13 @@ const paymentSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
-  client: {
-    type: mongoose.Schema.ObjectId,
-    ref: 'Client',
-    autopopulate: true,
-    required: true,
-  },
-  invoice: {
-    type: mongoose.Schema.ObjectId,
-    ref: 'Invoice',
-    required: true,
-    autopopulate: true,
-  },
+  // Payment date
   date: {
     type: Date,
     default: Date.now,
     required: true,
   },
+  // Payment amount
   amount: {
     type: Number,
     required: true,
@@ -38,16 +28,23 @@ const paymentSchema = new mongoose.Schema({
     uppercase: true,
     required: true,
   },
+  // Payment method
   paymentMode: {
     type: mongoose.Schema.ObjectId,
     ref: 'PaymentMode',
-    autopopulate: true,
   },
+  // Reference number
   ref: {
     type: String,
   },
   description: {
     type: String,
+  },
+  // Reference to Invoice
+  invoice: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'Invoice',
+    required: true,
   },
   updated: {
     type: Date,
@@ -58,5 +55,5 @@ const paymentSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
-paymentSchema.plugin(require('mongoose-autopopulate'));
+// paymentSchema.plugin(require('mongoose-autopopulate'));
 module.exports = mongoose.model('Payment', paymentSchema);

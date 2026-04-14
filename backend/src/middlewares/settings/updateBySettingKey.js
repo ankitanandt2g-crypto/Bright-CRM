@@ -1,9 +1,8 @@
 const mongoose = require('mongoose');
 
-const Model = mongoose.model('Setting');
-
 const updateBySettingKey = async ({ settingKey, settingValue }) => {
   try {
+    const Model = mongoose.models.Setting || mongoose.model('Setting');
     if (!settingKey || !settingValue) {
       return null;
     }
